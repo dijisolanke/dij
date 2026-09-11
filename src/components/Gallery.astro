@@ -1,0 +1,42 @@
+---
+import { urlFor, type SanityImage } from '../lib/sanity';
+
+interface Props {
+  images: SanityImage[];
+  alt: string;
+}
+
+const { images, alt } = Astro.props;
+---
+
+<div class="gallery" role="group" aria-label={`${alt} images`}>
+  {images.map((image, i) => (
+    <img
+      src={urlFor(image).width(900).height(900).fit('crop').url()}
+      alt={`${alt} — image ${i + 1} of ${images.length}`}
+      loading={i === 0 ? 'eager' : 'lazy'}
+      width="900"
+      height="900"
+    />
+  ))}
+</div>
+
+<style>
+  .gallery {
+    display: flex;
+    gap: var(--space-2);
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 4px;
+  }
+
+  .gallery img {
+    flex: 0 0 100%;
+    scroll-snap-align: start;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    border-radius: 4px;
+    background: var(--color-border);
+  }
+</style>

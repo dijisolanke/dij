@@ -1,0 +1,34 @@
+---
+export const prerender = true;
+
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Artist Name" description="Official site">
+  <main class="hero">
+    <img
+      src="/hero-placeholder.svg"
+      alt="Artist portrait"
+      width="960"
+      height="960"
+      class="hero-image"
+    />
+  </main>
+</Layout>
+
+<style>
+  .hero {
+    min-height: calc(100svh - 4.5rem);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-4) var(--space-3);
+  }
+
+  .hero-image {
+    width: 100%;
+    max-width: 560px;
+    height: auto;
+    border-radius: 4px;
+  }
+</style>

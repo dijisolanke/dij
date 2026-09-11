@@ -1,0 +1,132 @@
+---
+export const prerender = false;
+
+import Layout from '../../layouts/Layout.astro';
+import Gallery from '../../components/Gallery.astro';
+import { getShopItemBySlug } from '../../lib/sanity';
+
+const { slug } = Astro.params;
+
+let item: Awaited<ReturnType<typeof getShopItemBySlug>> = null;
+let loadError = false;
+
+try {
+  item = await getShopItemBySlug(slug!);
+} catch {
+  loadError = true;
+}
+
+if (!loadError && !item) {
+  return Astro.redirect('/shop');
+}
+---
+
+<Layout title={item ? item.title : 'Shop'} description={item?.description}>
+  <main class="container page">
+    {loadError && <p class="empty">Couldn't load this item right now. Please check back shortly.</p>}
+
+    {item && (
+      <div class="detail">
+        <Gallery images={item.images} alt={item.title} />
+
+        <div class="info">
+          <h1>{item.title}</h1>
+          <p class="price">
+            {new Intl.NumberFormat(undefined, {
+              style: 'currency',
+              currency: item.currency || 'USD',
+            }).format(item.price)}
+          </p>
+          {item.description && <p class="description">{item.description}</p>}
+
+          {item.soldOut ? (
+            <p class="sold-out">Sold out</p>
+          ) : (
+            <button id="buy-button" data-slug={item.slug.current}>Buy</button>
+          )}
+          <p id="buy-error" class="buy-error" hidden>Something went wrong — please try again.</p>
+        </div>
+      </div>
+    )}
+  </main>
+</Layout>
+
+<script>
+  const button = document.getElementById('buy-button');
+  const errorEl = document.getElementById('buy-error');
+
+  button?.addEventListener('click', async () => {
+    const slug = button.getAttribute('data-slug');
+    button.setAttribute('disabled', 'true');
+    button.textContent = 'Redirecting…';
+    errorEl?.setAttribute('hidden', 'true');
+
+    try {
+      const res = await fetch('/api/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.url) throw new Error(data.error || 'Checkout failed');
+      window.location.href = data.url;
+    } catch {
+      button.removeAttribute('disabled');
+      button.textContent = 'Buy';
+      errorEl?.removeAttribute('hidden');
+    }
+  });
+</script>
+
+<style>
+  .page {
+    padding-top: var(--space-4);
+    padding-bottom: var(--space-6);
+  }
+
+  .empty {
+    color: var(--color-text-muted);
+  }
+
+  .detail {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    gap: var(--space-4);
+    align-items: start;
+  }
+
+  .price {
+    font-size: 1.1rem;
+    color: var(--color-text);
+  }
+
+  .description {
+    max-width: 40ch;
+  }
+
+  button {
+    font: inherit;
+    background: var(--color-accent);
+    color: var(--color-bg);
+    border: none;
+    border-radius: 999px;
+    padding: 0.75rem 2rem;
+    cursor: pointer;
+  }
+
+  button:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  .sold-out,
+  .buy-error {
+    color: var(--color-text-muted);
+  }
+
+  @media (max-width: 800px) {
+    .detail {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

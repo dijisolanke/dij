@@ -1,0 +1,21 @@
+---
+export const prerender = false;
+
+import Layout from '../../layouts/Layout.astro';
+---
+
+<Layout title="Thank you" description="Order confirmed">
+  <main class="container page">
+    <h1>Thank you</h1>
+    <p>Your purchase is confirmed. A receipt has been sent to your email.</p>
+    <a href="/shop">&larr; Back to shop</a>
+  </main>
+</Layout>
+
+<style>
+  .page {
+    padding-top: var(--space-5);
+    padding-bottom: var(--space-6);
+    text-align: center;
+  }
+</style>

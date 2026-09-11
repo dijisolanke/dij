@@ -1,0 +1,119 @@
+---
+export const prerender = false;
+
+import Layout from '../layouts/Layout.astro';
+import { getUpcomingShows } from '../lib/sanity';
+
+Astro.response.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+
+let shows: Awaited<ReturnType<typeof getUpcomingShows>> = [];
+let loadError = false;
+
+try {
+  shows = await getUpcomingShows();
+} catch {
+  loadError = true;
+}
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+---
+
+<Layout title="Shows" description="Upcoming tour dates">
+  <main class="container page">
+    <h1>Shows</h1>
+
+    {loadError && (
+      <p class="empty">Couldn't load shows right now. Please check back shortly.</p>
+    )}
+
+    {!loadError && shows.length === 0 && (
+      <p class="empty">No shows announced yet — check back soon.</p>
+    )}
+
+    {!loadError && shows.length > 0 && (
+      <ul class="shows-list">
+        {shows.map((show) => (
+          <li class="show-row">
+            <span class="show-date">{formatDate(show.date)}</span>
+            <span class="show-venue">
+              {show.venue}<span class="show-city">, {show.city}</span>
+            </span>
+            <span class="show-status">
+              {show.soldOut ? (
+                <span class="sold-out">Sold out</span>
+              ) : (
+                show.ticketPrice != null && (
+                  <span class="price">
+                    {new Intl.NumberFormat(undefined, {
+                      style: 'currency',
+                      currency: show.currency || 'USD',
+                    }).format(show.ticketPrice)}
+                  </span>
+                )
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+    )}
+  </main>
+</Layout>
+
+<style>
+  .page {
+    padding-top: var(--space-4);
+    padding-bottom: var(--space-6);
+  }
+
+  .empty {
+    color: var(--color-text-muted);
+  }
+
+  .shows-list {
+    list-style: none;
+    margin: var(--space-4) 0 0;
+    padding: 0;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .show-row {
+    display: grid;
+    grid-template-columns: 10rem 1fr auto;
+    gap: var(--space-2);
+    align-items: baseline;
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .show-date {
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+  }
+
+  .show-city {
+    color: var(--color-text-muted);
+  }
+
+  .sold-out {
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+  }
+
+  .price {
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (max-width: 640px) {
+    .show-row {
+      grid-template-columns: 1fr;
+      gap: var(--space-1);
+    }
+  }
+</style>
