@@ -1,4 +1,16 @@
 {
-  "extends": "sanity/typescript/studio",
+  "compilerOptions": {
+    "target": "ESNext",
+    "useDefineForClassFields": true,
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true
+  },
   "include": ["./sanity.config.ts", "./sanity.cli.ts", "./schemaTypes/**/*.ts"]
 }
