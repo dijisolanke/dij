@@ -1,0 +1,140 @@
+---
+export const prerender = false;
+
+import Layout from '../layouts/Layout.astro';
+import { getProjects, urlFor } from '../lib/sanity';
+
+Astro.response.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+
+let projects: Awaited<ReturnType<typeof getProjects>> = [];
+let loadError = false;
+
+try {
+  projects = await getProjects();
+} catch {
+  loadError = true;
+}
+---
+
+<Layout title="Projects" description="Other musical projects">
+  <main class="container page">
+    <h1>Projects</h1>
+
+    {loadError && <p class="empty">Couldn't load this page right now. Please check back shortly.</p>}
+    {!loadError && projects.length === 0 && <p class="empty">Nothing here yet — check back soon.</p>}
+
+    {!loadError && projects.length > 0 && (
+      <div class="list">
+        {projects.map((project) => (
+          <article class="project">
+            {project.image && (
+              <img
+                src={urlFor(project.image).width(700).height(500).fit('crop').url()}
+                alt={project.title}
+                loading="lazy"
+                width="700"
+                height="500"
+              />
+            )}
+            <div class="project-body">
+              <h2>{project.title}</h2>
+              {project.description && <p>{project.description}</p>}
+
+              {project.quote?.text && (
+                <blockquote>
+                  <p>&ldquo;{project.quote.text}&rdquo;</p>
+                  {project.quote.attribution && <cite>— {project.quote.attribution}</cite>}
+                </blockquote>
+              )}
+
+              {project.links && project.links.length > 0 && (
+                <ul class="links">
+                  {project.links.map((link) => (
+                    <li>
+                      <a href={link.url} target="_blank" rel="noopener noreferrer">
+                        {link.label}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </article>
+        ))}
+      </div>
+    )}
+  </main>
+</Layout>
+
+<style>
+  .page {
+    padding-top: var(--space-4);
+    padding-bottom: var(--space-6);
+  }
+
+  .empty {
+    color: var(--color-text-muted);
+  }
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+    margin-top: var(--space-4);
+  }
+
+  .project {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+    gap: var(--space-4);
+    align-items: start;
+  }
+
+  .project img {
+    width: 100%;
+    border-radius: 4px;
+    object-fit: cover;
+  }
+
+  .project-body p {
+    max-width: 60ch;
+  }
+
+  blockquote {
+    margin: var(--space-2) 0;
+    padding-left: var(--space-2);
+    border-left: 2px solid var(--color-border);
+  }
+
+  blockquote p {
+    font-style: italic;
+    margin-bottom: var(--space-1);
+  }
+
+  cite {
+    font-style: normal;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+  }
+
+  .links {
+    list-style: none;
+    display: flex;
+    gap: var(--space-3);
+    margin: var(--space-2) 0 0;
+    padding: 0;
+  }
+
+  .links a {
+    text-decoration: none;
+    color: var(--color-text);
+    font-size: 0.9rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  @media (max-width: 760px) {
+    .project {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

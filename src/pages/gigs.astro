@@ -2,15 +2,15 @@
 export const prerender = false;
 
 import Layout from '../layouts/Layout.astro';
-import { getUpcomingShows } from '../lib/sanity';
+import { getUpcomingGigs } from '../lib/sanity';
 
 Astro.response.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
 
-let shows: Awaited<ReturnType<typeof getUpcomingShows>> = [];
+let gigs: Awaited<ReturnType<typeof getUpcomingGigs>> = [];
 let loadError = false;
 
 try {
-  shows = await getUpcomingShows();
+  gigs = await getUpcomingGigs();
 } catch {
   loadError = true;
 }
@@ -23,40 +23,40 @@ function formatDate(iso: string) {
     year: 'numeric',
   });
 }
+
+const isUrl = (value: string) => /^https?:\/\//i.test(value.trim());
 ---
 
-<Layout title="Shows" description="Upcoming tour dates">
+<Layout title="Gigs" description="Upcoming shows">
   <main class="container page">
-    <h1>Shows</h1>
+    <h1>Gigs</h1>
 
     {loadError && (
-      <p class="empty">Couldn't load shows right now. Please check back shortly.</p>
+      <p class="empty">Couldn't load gigs right now. Please check back shortly.</p>
     )}
 
-    {!loadError && shows.length === 0 && (
-      <p class="empty">No shows announced yet — check back soon.</p>
+    {!loadError && gigs.length === 0 && (
+      <p class="empty">No gigs announced yet — check back soon.</p>
     )}
 
-    {!loadError && shows.length > 0 && (
-      <ul class="shows-list">
-        {shows.map((show) => (
-          <li class="show-row">
-            <span class="show-date">{formatDate(show.date)}</span>
-            <span class="show-venue">
-              {show.venue}<span class="show-city">, {show.city}</span>
+    {!loadError && gigs.length > 0 && (
+      <ul class="gigs-list">
+        {gigs.map((gig) => (
+          <li class="gig-row">
+            <span class="gig-date">{formatDate(gig.date)}</span>
+            <span class="gig-venue">
+              {gig.venue}<span class="gig-city">, {gig.city}</span>
             </span>
-            <span class="show-status">
-              {show.soldOut ? (
+            <span class="gig-status">
+              {gig.soldOut ? (
                 <span class="sold-out">Sold out</span>
               ) : (
-                show.ticketPrice != null && (
-                  <span class="price">
-                    {new Intl.NumberFormat(undefined, {
-                      style: 'currency',
-                      currency: show.currency || 'USD',
-                    }).format(show.ticketPrice)}
-                  </span>
-                )
+                gig.notes &&
+                (isUrl(gig.notes) ? (
+                  <a href={gig.notes} target="_blank" rel="noopener noreferrer">Tickets</a>
+                ) : (
+                  <span class="notes">{gig.notes}</span>
+                ))
               )}
             </span>
           </li>
@@ -76,14 +76,14 @@ function formatDate(iso: string) {
     color: var(--color-text-muted);
   }
 
-  .shows-list {
+  .gigs-list {
     list-style: none;
     margin: var(--space-4) 0 0;
     padding: 0;
     border-top: 1px solid var(--color-border);
   }
 
-  .show-row {
+  .gig-row {
     display: grid;
     grid-template-columns: 10rem 1fr auto;
     gap: var(--space-2);
@@ -92,26 +92,23 @@ function formatDate(iso: string) {
     border-bottom: 1px solid var(--color-border);
   }
 
-  .show-date {
+  .gig-date {
     color: var(--color-text-muted);
     font-size: 0.9rem;
   }
 
-  .show-city {
+  .gig-city {
     color: var(--color-text-muted);
   }
 
-  .sold-out {
+  .sold-out,
+  .notes {
     color: var(--color-text-muted);
     font-size: 0.9rem;
-  }
-
-  .price {
-    font-variant-numeric: tabular-nums;
   }
 
   @media (max-width: 640px) {
-    .show-row {
+    .gig-row {
       grid-template-columns: 1fr;
       gap: var(--space-1);
     }

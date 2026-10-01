@@ -1,10 +1,10 @@
-# Deferred: BTS Surprise/Prize Mechanic
+# Deferred: Watch Page Surprise/Prize Mechanic
 
 **Status: not built. Do not implement until the artist has answered the open questions below.**
 
 ## The idea (in the artist's words)
 
-On the BTS page, add a "surprise" element where fans can win random prizes — e.g. a free ticket or free merch. It's meant to feel like an easter egg: unexpected, not a prominently advertised promotion.
+On the Watch page (originally called "BTS"), add a "surprise" element where fans can win random prizes — e.g. a free ticket or free merch. It's meant to feel like an easter egg: unexpected, not a prominently advertised promotion.
 
 ## Why this isn't built yet
 
@@ -12,9 +12,9 @@ The specifics weren't decided when the rest of the site was built (2026-09-11): 
 
 ## What already exists to build on
 
-- `studio/schemaTypes/btsEntry.ts` has an `entryType` field (`standard` | `surprise`, default `standard`). No code currently branches on this value — it's inert.
+- `studio/schemaTypes/watchEntry.ts` has an `entryType` field (`standard` | `surprise`, default `standard`). No code currently branches on this value — it's inert.
 - The site's overall architecture (see the original build plan, or ask the artist/repo owner for it) is: Astro on Vercel (hybrid rendering — see `astro.config.mjs`), Sanity.io as the CMS (`src/lib/sanity.ts`), Stripe Checkout for payments (`src/pages/api/create-checkout-session.ts`, `src/lib/stripe.ts`). Any implementation of this feature should stay consistent with that stack rather than introducing a new one, to keep the site lightweight.
-- The BTS page itself is `src/pages/bts.astro`, currently rendering CMS-driven entries with a `revealStyle` of `always-visible` or `tap-to-reveal`.
+- The Watch page itself is `src/pages/watch.astro`, currently rendering CMS-driven entries (mixing images, uploaded videos, and linked YouTube/Vimeo videos) with a `revealStyle` of `always-visible` or `tap-to-reveal`.
 
 ## Open questions to ask the artist before writing any code
 

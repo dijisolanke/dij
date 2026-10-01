@@ -1,34 +1,111 @@
 ---
-export const prerender = true;
+export const prerender = false;
 
 import Layout from '../layouts/Layout.astro';
+import { getAbout, urlFor } from '../lib/sanity';
+
+Astro.response.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+
+let about: Awaited<ReturnType<typeof getAbout>> = null;
+let loadError = false;
+
+try {
+  about = await getAbout();
+} catch {
+  loadError = true;
+}
+
+const paragraphs = about?.bio ? about.bio.split(/\n\s*\n/).filter(Boolean) : [];
 ---
 
-<Layout title="Artist Name" description="Official site">
-  <main class="hero">
-    <img
-      src="/hero-placeholder.svg"
-      alt="Artist portrait"
-      width="960"
-      height="960"
-      class="hero-image"
-    />
+<Layout title={about?.name || 'Artist Name'} description={about?.bio}>
+  <main class="container page">
+    {loadError && <p class="empty">Couldn't load this page right now. Please check back shortly.</p>}
+
+    {!loadError && !about && (
+      <p class="empty">Content coming soon.</p>
+    )}
+
+    {about && (
+      <article class="about">
+        <img
+          src={urlFor(about.heroImage).width(900).height(1100).fit('crop').url()}
+          alt={about.name}
+          width="900"
+          height="1100"
+          class="hero-image"
+        />
+
+        <div class="bio">
+          <h1>{about.name}</h1>
+          {paragraphs.map((paragraph) => (
+            <p>{paragraph}</p>
+          ))}
+
+          {about.socialLinks && about.socialLinks.length > 0 && (
+            <ul class="social-links">
+              {about.socialLinks.map((link) => (
+                <li>
+                  <a href={link.url} target="_blank" rel="noopener noreferrer">
+                    {link.platform || link.url}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </article>
+    )}
   </main>
 </Layout>
 
 <style>
-  .hero {
-    min-height: calc(100svh - 4.5rem);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: var(--space-4) var(--space-3);
+  .page {
+    padding-top: var(--space-4);
+    padding-bottom: var(--space-6);
+  }
+
+  .empty {
+    color: var(--color-text-muted);
+  }
+
+  .about {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+    gap: var(--space-5);
+    align-items: start;
+    max-width: 960px;
+    margin: 0 auto;
   }
 
   .hero-image {
     width: 100%;
-    max-width: 560px;
-    height: auto;
     border-radius: 4px;
+    object-fit: cover;
+  }
+
+  .bio p {
+    max-width: 55ch;
+  }
+
+  .social-links {
+    list-style: none;
+    display: flex;
+    gap: var(--space-3);
+    margin: var(--space-3) 0 0;
+    padding: 0;
+  }
+
+  .social-links a {
+    text-decoration: none;
+    color: var(--color-text);
+    font-size: 0.9rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  @media (max-width: 760px) {
+    .about {
+      grid-template-columns: 1fr;
+    }
   }
 </style>

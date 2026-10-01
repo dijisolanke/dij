@@ -14,29 +14,53 @@ export const sanity = createClient({
 const builder = imageUrlBuilder(sanity);
 
 export interface SanityImage {
-  _type: 'image';
+  _type: string;
   asset: { _ref: string; _type: 'reference' };
   hotspot?: { x: number; y: number; width: number; height: number };
-}
-
-export interface SanityFile {
-  _type: string;
-  asset: { url: string; mimeType?: string; _ref?: string };
 }
 
 export function urlFor(source: SanityImage) {
   return builder.image(source);
 }
 
-export interface Show {
+export interface SocialLink {
+  platform: string;
+  url: string;
+}
+
+export interface About {
+  _id: string;
+  name: string;
+  heroImage: SanityImage;
+  bio: string;
+  socialLinks?: SocialLink[];
+}
+
+export interface SiteSettings {
+  shopEnabled: boolean;
+}
+
+export interface Gig {
   _id: string;
   date: string;
   venue: string;
   city: string;
-  ticketPrice?: number;
-  currency?: string;
   soldOut?: boolean;
   notes?: string;
+}
+
+export interface ProjectLink {
+  label: string;
+  url: string;
+}
+
+export interface Project {
+  _id: string;
+  title: string;
+  image?: SanityImage;
+  description?: string;
+  links?: ProjectLink[];
+  quote?: { text?: string; attribution?: string };
 }
 
 export interface ShopItem {
@@ -51,20 +75,36 @@ export interface ShopItem {
   soldOut?: boolean;
 }
 
-export interface BtsEntry {
+export type WatchMedia =
+  | (SanityImage & { _type: 'mediaImage' })
+  | { _type: 'videoUpload'; title?: string; asset: { url: string; mimeType?: string } }
+  | { _type: 'videoLink'; title?: string; url: string };
+
+export interface WatchEntry {
   _id: string;
-  title: string;
+  title?: string;
   body?: string;
-  media?: Array<SanityImage | SanityFile>;
+  media?: WatchMedia[];
   revealStyle: 'always-visible' | 'tap-to-reveal';
   entryType: 'standard' | 'surprise';
   weight?: number;
 }
 
-export async function getUpcomingShows(): Promise<Show[]> {
-  return sanity.fetch(
-    `*[_type == "show" && date >= now()] | order(date asc)`
-  );
+export async function getAbout(): Promise<About | null> {
+  return sanity.fetch(`*[_type == "about"][0]`);
+}
+
+export async function getSiteSettings(): Promise<SiteSettings> {
+  const settings = await sanity.fetch<SiteSettings | null>(`*[_type == "siteSettings"][0]`);
+  return settings ?? { shopEnabled: true };
+}
+
+export async function getUpcomingGigs(): Promise<Gig[]> {
+  return sanity.fetch(`*[_type == "gig" && date >= now()] | order(date asc)`);
+}
+
+export async function getProjects(): Promise<Project[]> {
+  return sanity.fetch(`*[_type == "project"] | order(coalesce(weight, 100) asc, _createdAt desc)`);
 }
 
 export async function getShopItems(): Promise<ShopItem[]> {
@@ -78,13 +118,13 @@ export async function getShopItemBySlug(slug: string): Promise<ShopItem | null> 
   );
 }
 
-export async function getBtsEntries(): Promise<BtsEntry[]> {
+export async function getWatchEntries(): Promise<WatchEntry[]> {
   return sanity.fetch(
-    `*[_type == "btsEntry"] | order(coalesce(weight, 100) asc, _createdAt desc) {
+    `*[_type == "watchEntry"] | order(coalesce(weight, 100) asc, _createdAt desc) {
       ...,
       media[] {
         ...,
-        _type == "mediaVideo" => { "asset": asset->{url, mimeType} }
+        _type == "videoUpload" => { "asset": asset->{url, mimeType} }
       }
     }`
   );

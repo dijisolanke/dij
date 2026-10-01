@@ -1,0 +1,203 @@
+---
+export const prerender = false;
+
+import Layout from '../layouts/Layout.astro';
+import { getWatchEntries, urlFor, type WatchMedia } from '../lib/sanity';
+
+Astro.response.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+
+let entries: Awaited<ReturnType<typeof getWatchEntries>> = [];
+let loadError = false;
+
+try {
+  entries = await getWatchEntries();
+} catch {
+  loadError = true;
+}
+
+function youtubeEmbed(url: string): string | null {
+  const watch = url.match(/[?&]v=([\w-]{11})/);
+  if (watch) return `https://www.youtube.com/embed/${watch[1]}`;
+  const short = url.match(/youtu\.be\/([\w-]{11})/);
+  if (short) return `https://www.youtube.com/embed/${short[1]}`;
+  return null;
+}
+
+function vimeoEmbed(url: string): string | null {
+  const match = url.match(/vimeo\.com\/(\d+)/);
+  return match ? `https://player.vimeo.com/video/${match[1]}` : null;
+}
+---
+
+<Layout title="Watch" description="Videos">
+  <main class="container page">
+    <h1>Watch</h1>
+
+    {loadError && <p class="empty">Couldn't load this page right now. Please check back shortly.</p>}
+    {!loadError && entries.length === 0 && <p class="empty">Nothing here yet — check back soon.</p>}
+
+    {!loadError && entries.length > 0 && (
+      <div class="feed">
+        {entries.map((entry) => (
+          <article
+            class="entry"
+            data-reveal={entry.revealStyle === 'tap-to-reveal' ? 'true' : undefined}
+          >
+            <div class="entry-cover">
+              <span class="reveal-hint">Tap to reveal</span>
+              <div class="entry-content">
+                {entry.title && <h2>{entry.title}</h2>}
+                {entry.body && <p>{entry.body}</p>}
+                {entry.media && entry.media.length > 0 && (
+                  <div class="media">
+                    {entry.media.map((m: WatchMedia) => {
+                      if (m._type === 'mediaImage') {
+                        return <img src={urlFor(m).width(900).url()} alt="" loading="lazy" />;
+                      }
+                      if (m._type === 'videoUpload') {
+                        return (
+                          <figure class="video">
+                            <video src={m.asset.url} controls preload="none" />
+                            {m.title && <figcaption>{m.title}</figcaption>}
+                          </figure>
+                        );
+                      }
+                      if (m._type === 'videoLink') {
+                        const embed = youtubeEmbed(m.url) || vimeoEmbed(m.url);
+                        return (
+                          <figure class="video">
+                            {embed ? (
+                              <div class="embed-wrap">
+                                <iframe
+                                  src={embed}
+                                  loading="lazy"
+                                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                  allowfullscreen
+                                />
+                              </div>
+                            ) : (
+                              <a href={m.url} target="_blank" rel="noopener noreferrer">
+                                {m.title || 'Watch video'}
+                              </a>
+                            )}
+                            {embed && m.title && <figcaption>{m.title}</figcaption>}
+                          </figure>
+                        );
+                      }
+                      return null;
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </article>
+        ))}
+      </div>
+    )}
+  </main>
+</Layout>
+
+<script>
+  document.querySelectorAll<HTMLElement>('.entry[data-reveal="true"]').forEach((entry) => {
+    entry.addEventListener(
+      'click',
+      () => {
+        entry.classList.add('revealed');
+      },
+      { once: true }
+    );
+  });
+</script>
+
+<style>
+  .page {
+    padding-top: var(--space-4);
+    padding-bottom: var(--space-6);
+  }
+
+  .empty {
+    color: var(--color-text-muted);
+  }
+
+  .feed {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+    margin-top: var(--space-4);
+    max-width: 640px;
+  }
+
+  .entry-content h2 {
+    margin-bottom: var(--space-1);
+  }
+
+  .media {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+  }
+
+  .media img,
+  .media video {
+    width: 100%;
+    border-radius: 4px;
+  }
+
+  .embed-wrap {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .embed-wrap iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+  }
+
+  .video figcaption {
+    margin-top: var(--space-1);
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+  }
+
+  .entry[data-reveal='true'] .entry-content {
+    filter: blur(16px);
+    user-select: none;
+    transition: filter 0.4s ease;
+  }
+
+  .entry[data-reveal='true'] {
+    cursor: pointer;
+    position: relative;
+  }
+
+  .entry[data-reveal='true'] .reveal-hint {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  .entry[data-reveal='true'].revealed .entry-content {
+    filter: none;
+  }
+
+  .entry[data-reveal='true'].revealed {
+    cursor: default;
+  }
+
+  .entry[data-reveal='true'].revealed .reveal-hint {
+    display: none;
+  }
+</style>

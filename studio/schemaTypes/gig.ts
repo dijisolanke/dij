@@ -1,8 +1,8 @@
 import {defineField, defineType} from 'sanity'
 
 export default defineType({
-  name: 'show',
-  title: 'Show',
+  name: 'gig',
+  title: 'Gig',
   type: 'document',
   fields: [
     defineField({
@@ -22,19 +22,6 @@ export default defineType({
       title: 'City',
       type: 'string',
       validation: (Rule) => Rule.required(),
-    }),
-    defineField({
-      name: 'ticketPrice',
-      title: 'Ticket price',
-      type: 'number',
-      description: 'Price in whole currency units, e.g. 25 for $25.00',
-    }),
-    defineField({
-      name: 'currency',
-      title: 'Currency',
-      type: 'string',
-      initialValue: 'usd',
-      options: {list: ['usd', 'gbp', 'eur']},
     }),
     defineField({
       name: 'soldOut',

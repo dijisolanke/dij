@@ -1,26 +1,45 @@
 ---
+import { getSiteSettings } from '../lib/sanity';
+
 const { pathname } = Astro.url;
 
+let shopEnabled = true;
+try {
+  ({ shopEnabled } = await getSiteSettings());
+} catch {
+  // Sanity unreachable — default to enabled rather than hiding the link.
+}
+
 const links = [
-  { href: '/shows', label: 'Shows' },
-  { href: '/shop', label: 'Shop' },
-  { href: '/bts', label: 'BTS' },
+  { href: '/', label: 'About Merle' },
+  { href: '/gigs', label: 'Gigs' },
+  { href: '/projects', label: 'Projects' },
+  { href: '/shop', label: 'Shop', disabled: !shopEnabled },
+  { href: '/watch', label: 'Watch' },
 ];
 ---
 
 <header class="nav">
   <div class="container nav-inner">
-    <a href="/" class="nav-home" aria-label="Home">Home</a>
     <nav aria-label="Main">
       <ul>
         {links.map((link) => (
           <li>
-            <a
-              href={link.href}
-              aria-current={pathname.startsWith(link.href) ? 'page' : undefined}
-            >
-              {link.label}
-            </a>
+            {link.disabled ? (
+              <span class="disabled" aria-disabled="true" title="Coming soon">
+                {link.label}
+              </span>
+            ) : (
+              <a
+                href={link.href}
+                aria-current={
+                  link.href === '/' ? pathname === '/' ? 'page' : undefined
+                  : pathname.startsWith(link.href) ? 'page' : undefined
+                }
+              >
+                {link.label}
+              </a>
+            )}
           </li>
         ))}
       </ul>
@@ -42,26 +61,23 @@ const links = [
   .nav-inner {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
     padding-top: var(--space-2);
     padding-bottom: var(--space-2);
-  }
-
-  .nav-home {
-    text-decoration: none;
-    font-weight: 600;
-    letter-spacing: -0.01em;
   }
 
   nav ul {
     list-style: none;
     display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
     gap: var(--space-3);
     margin: 0;
     padding: 0;
   }
 
-  nav a {
+  nav a,
+  nav .disabled {
     text-decoration: none;
     font-size: 0.95rem;
     color: var(--color-text-muted);
@@ -71,5 +87,11 @@ const links = [
   nav a:hover,
   nav a[aria-current='page'] {
     color: var(--color-text);
+  }
+
+  nav .disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    user-select: none;
   }
 </style>
