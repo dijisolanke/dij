@@ -18,7 +18,7 @@ try {
 const paragraphs = about?.bio ? about.bio.split(/\n\s*\n/).filter(Boolean) : [];
 ---
 
-<Layout title={about?.name || 'Artist Name'} description={about?.bio}>
+<Layout title={about ? `About ${about.name}` : 'Artist Name'} description={about?.bio}>
   <main class="container page">
     {loadError && <p class="empty">Couldn't load this page right now. Please check back shortly.</p>}
 
@@ -28,31 +28,20 @@ const paragraphs = about?.bio ? about.bio.split(/\n\s*\n/).filter(Boolean) : [];
 
     {about && (
       <article class="about">
+        <h1>About {about.name}</h1>
+
         <img
-          src={urlFor(about.heroImage).width(900).height(1100).fit('crop').url()}
+          src={urlFor(about.heroImage).width(1000).height(1250).fit('crop').url()}
           alt={about.name}
-          width="900"
-          height="1100"
+          width="1000"
+          height="1250"
           class="hero-image"
         />
 
         <div class="bio">
-          <h1>{about.name}</h1>
           {paragraphs.map((paragraph) => (
             <p>{paragraph}</p>
           ))}
-
-          {about.socialLinks && about.socialLinks.length > 0 && (
-            <ul class="social-links">
-              {about.socialLinks.map((link) => (
-                <li>
-                  <a href={link.url} target="_blank" rel="noopener noreferrer">
-                    {link.platform || link.url}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          )}
         </div>
       </article>
     )}
@@ -70,42 +59,18 @@ const paragraphs = about?.bio ? about.bio.split(/\n\s*\n/).filter(Boolean) : [];
   }
 
   .about {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
-    gap: var(--space-5);
-    align-items: start;
-    max-width: 960px;
-    margin: 0 auto;
+    max-width: 760px;
   }
 
   .hero-image {
     width: 100%;
+    max-width: 560px;
     border-radius: 4px;
     object-fit: cover;
+    margin-bottom: var(--space-4);
   }
 
   .bio p {
-    max-width: 55ch;
-  }
-
-  .social-links {
-    list-style: none;
-    display: flex;
-    gap: var(--space-3);
-    margin: var(--space-3) 0 0;
-    padding: 0;
-  }
-
-  .social-links a {
-    text-decoration: none;
-    color: var(--color-text);
-    font-size: 0.9rem;
-    border-bottom: 1px solid var(--color-border);
-  }
-
-  @media (max-width: 760px) {
-    .about {
-      grid-template-columns: 1fr;
-    }
+    max-width: 65ch;
   }
 </style>

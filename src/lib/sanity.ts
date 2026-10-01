@@ -33,15 +33,18 @@ export interface About {
   name: string;
   heroImage: SanityImage;
   bio: string;
-  socialLinks?: SocialLink[];
 }
 
 export interface SiteSettings {
+  siteName: string;
+  tagline?: string;
+  socialLinks?: SocialLink[];
   shopEnabled: boolean;
 }
 
 export interface Gig {
   _id: string;
+  title?: string;
   date: string;
   venue: string;
   city: string;
@@ -96,7 +99,7 @@ export async function getAbout(): Promise<About | null> {
 
 export async function getSiteSettings(): Promise<SiteSettings> {
   const settings = await sanity.fetch<SiteSettings | null>(`*[_type == "siteSettings"][0]`);
-  return settings ?? { shopEnabled: true };
+  return settings ?? { siteName: 'Artist Name', shopEnabled: true };
 }
 
 export async function getUpcomingGigs(): Promise<Gig[]> {

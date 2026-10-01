@@ -1,6 +1,6 @@
 # Content Studio
 
-This is the Sanity Studio used to manage every page of the site — About Merle, Gigs, Projects, Shop Items, Watch Entries, and Site Settings — edit content here and it appears on the live site within about a minute, with no code changes or redeploys.
+This is the Sanity Studio used to manage every page of the site — About Diji, Gigs, Projects, Shop Items, Watch Entries, and Site Settings — edit content here and it appears on the live site within about a minute, with no code changes or redeploys.
 
 ## One-time setup (do this once, requires a free Sanity.io account)
 

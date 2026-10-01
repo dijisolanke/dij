@@ -1,6 +1,6 @@
 # Artist Site
 
-A lightweight musician website modeled on merleharbronmusic.com's structure: About Merle (home), Gigs, Projects, Shop (Stripe-powered), and Watch — every page's content is editable on the fly via Sanity Studio, no code changes needed.
+A lightweight musician website for and by Adediji Solanke for his art — every page's content is editable on the fly via Sanity Studio, no code changes needed.
 
 ## Stack
 
@@ -12,13 +12,15 @@ Full architecture rationale: see the original plan at `/Users/diji/.claude/plans
 
 ## Pages ↔ Sanity schemas
 
-| Page | Route | Sanity schema |
-| :--- | :--- | :--- |
-| About Merle (home) | `/` | `about` (singleton — bio text + photo + social links) |
-| Gigs | `/gigs` | `gig` (date, venue, city, sold out, notes) |
-| Projects | `/projects` | `project` (title, image, description, links, quote) |
-| Shop | `/shop` | `shopItem` (2–5 images, price, type); shop link's clickability is controlled by `siteSettings` (singleton) |
-| Watch | `/watch` | `watchEntry` (title/body + a mix of images, uploaded videos, and video links) |
+| Page              | Route       | Sanity schema                                                                                              |
+| :---------------- | :---------- | :--------------------------------------------------------------------------------------------------------- |
+| About Diji (home) | `/`         | `about` (singleton — bio text + photo)                                                                     |
+| Gigs              | `/gigs`     | `gig` (optional event/act title, date, venue, city, sold out, notes)                                       |
+| Projects          | `/projects` | `project` (title, image, description, links, quote)                                                        |
+| Shop              | `/shop`     | `shopItem` (2–5 images, price, type); shop link's clickability is controlled by `siteSettings` (singleton) |
+| Watch             | `/watch`    | `watchEntry` (title/body + a mix of images, uploaded videos, and video links)                              |
+
+The sidebar shown on every page (site name, tagline, nav, social links) also comes from the `siteSettings` singleton — it's the one schema that isn't tied to a single page.
 
 ## Project Structure
 
@@ -26,7 +28,7 @@ Full architecture rationale: see the original plan at `/Users/diji/.claude/plans
 /
 ├── src/
 │   ├── pages/
-│   │   ├── index.astro          # About Merle (home)
+│   │   ├── index.astro          # About Diji (home)
 │   │   ├── gigs.astro           # tour dates, from Sanity
 │   │   ├── projects.astro       # other musical projects
 │   │   ├── shop/
@@ -37,7 +39,7 @@ Full architecture rationale: see the original plan at `/Users/diji/.claude/plans
 │   │   └── api/
 │   │       ├── create-checkout-session.ts
 │   │       └── stripe-webhook.ts
-│   ├── components/               # Nav, Footer, Gallery
+│   ├── components/               # Sidebar, Footer, Gallery
 │   ├── layouts/Layout.astro
 │   ├── lib/sanity.ts             # Sanity client + content queries
 │   └── lib/stripe.ts             # Stripe client
@@ -48,7 +50,7 @@ Full architecture rationale: see the original plan at `/Users/diji/.claude/plans
 
 ### The Shop "coming soon" toggle
 
-`siteSettings` is a singleton document in Sanity with a `shopEnabled` boolean. When turned off, the Nav still shows the word "Shop" but renders it as plain, unclickable text rather than a link — the shop page itself is still reachable by direct URL, this only gates the menu entry.
+`siteSettings` is a singleton document in Sanity with a `shopEnabled` boolean. When turned off, the sidebar still shows the word "Shop" but renders it as plain, unclickable text rather than a link — the shop page itself is still reachable by direct URL, this only gates the menu entry.
 
 ## Setup
 
@@ -59,7 +61,7 @@ Full architecture rationale: see the original plan at `/Users/diji/.claude/plans
    - `STRIPE_SECRET_KEY` (test mode key from the [Stripe dashboard](https://dashboard.stripe.com/test/apikeys))
    - `STRIPE_WEBHOOK_SECRET` (from `stripe listen` locally, or the Stripe dashboard once deployed — see below)
 4. `npm run dev` — starts the site at `http://localhost:4321`.
-5. In Sanity Studio (`cd studio && npm run dev`), fill in the **About Merle** and **Site Settings** singletons under "Content" — the homepage shows an empty state until About Merle has a name, photo, and bio.
+5. In Sanity Studio (`cd studio && npm run dev`), fill in the **About Diji** and **Site Settings** singletons under "Content" — the homepage shows an empty state until About Diji has a name, photo, and bio, and the sidebar needs Site Settings' site name (tagline and social links are optional).
 
 ## Testing Stripe locally
 
@@ -81,9 +83,9 @@ This prints a webhook signing secret — put it in `.env` as `STRIPE_WEBHOOK_SEC
 
 ## Commands
 
-| Command           | Action                                       |
-| :----------------- | :-------------------------------------------- |
-| `npm run dev`       | Start local dev server at `localhost:4321`    |
-| `npm run build`     | Build production site to `./dist/`            |
-| `npm run preview`   | Preview the production build locally          |
+| Command                    | Action                                        |
+| :------------------------- | :-------------------------------------------- |
+| `npm run dev`              | Start local dev server at `localhost:4321`    |
+| `npm run build`            | Build production site to `./dist/`            |
+| `npm run preview`          | Preview the production build locally          |
 | `cd studio && npm run dev` | Run Sanity Studio locally at `localhost:3333` |

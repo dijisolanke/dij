@@ -6,6 +6,12 @@ export default defineType({
   type: 'document',
   fields: [
     defineField({
+      name: 'title',
+      title: 'Event / act name',
+      type: 'string',
+      description: 'Optional headline shown above the date, e.g. "DIY Ceilidh — Saltburn Folk Festival". Leave blank to just show the venue.',
+    }),
+    defineField({
       name: 'date',
       title: 'Date',
       type: 'datetime',
@@ -38,10 +44,10 @@ export default defineType({
     }),
   ],
   preview: {
-    select: {title: 'venue', subtitle: 'city', date: 'date'},
-    prepare({title, subtitle, date}) {
+    select: {title: 'title', venue: 'venue', subtitle: 'city', date: 'date'},
+    prepare({title, venue, subtitle, date}) {
       const formatted = date ? new Date(date).toLocaleDateString() : 'No date'
-      return {title: `${formatted} — ${title}`, subtitle}
+      return {title: `${formatted} — ${title || venue}`, subtitle}
     },
   },
   orderings: [

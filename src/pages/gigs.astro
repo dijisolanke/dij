@@ -17,9 +17,8 @@ try {
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, {
-    weekday: 'short',
-    month: 'short',
     day: 'numeric',
+    month: 'long',
     year: 'numeric',
   });
 }
@@ -42,23 +41,22 @@ const isUrl = (value: string) => /^https?:\/\//i.test(value.trim());
     {!loadError && gigs.length > 0 && (
       <ul class="gigs-list">
         {gigs.map((gig) => (
-          <li class="gig-row">
-            <span class="gig-date">{formatDate(gig.date)}</span>
-            <span class="gig-venue">
-              {gig.venue}<span class="gig-city">, {gig.city}</span>
-            </span>
-            <span class="gig-status">
-              {gig.soldOut ? (
-                <span class="sold-out">Sold out</span>
+          <li class="gig">
+            <h2 class="gig-title">{gig.title || gig.venue}</h2>
+            <p class="gig-meta">
+              {formatDate(gig.date)}
+              {gig.title ? ` — ${gig.venue}, ${gig.city}` : `, ${gig.city}`}
+            </p>
+            {gig.soldOut ? (
+              <p class="sold-out">Sold out</p>
+            ) : (
+              gig.notes &&
+              (isUrl(gig.notes) ? (
+                <p><a href={gig.notes} target="_blank" rel="noopener noreferrer">Tickets</a></p>
               ) : (
-                gig.notes &&
-                (isUrl(gig.notes) ? (
-                  <a href={gig.notes} target="_blank" rel="noopener noreferrer">Tickets</a>
-                ) : (
-                  <span class="notes">{gig.notes}</span>
-                ))
-              )}
-            </span>
+                <p class="notes">{gig.notes}</p>
+              ))
+            )}
           </li>
         ))}
       </ul>
@@ -80,37 +78,30 @@ const isUrl = (value: string) => /^https?:\/\//i.test(value.trim());
     list-style: none;
     margin: var(--space-4) 0 0;
     padding: 0;
-    border-top: 1px solid var(--color-border);
+    max-width: 640px;
   }
 
-  .gig-row {
-    display: grid;
-    grid-template-columns: 10rem 1fr auto;
-    gap: var(--space-2);
-    align-items: baseline;
-    padding: var(--space-2) 0;
+  .gig {
+    padding: var(--space-3) 0;
     border-bottom: 1px solid var(--color-border);
   }
 
-  .gig-date {
-    color: var(--color-text-muted);
-    font-size: 0.9rem;
+  .gig:first-child {
+    padding-top: 0;
   }
 
-  .gig-city {
-    color: var(--color-text-muted);
+  .gig-title {
+    font-size: 1.1rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .gig-meta {
+    margin-bottom: 0;
   }
 
   .sold-out,
   .notes {
-    color: var(--color-text-muted);
+    margin: var(--space-1) 0 0;
     font-size: 0.9rem;
-  }
-
-  @media (max-width: 640px) {
-    .gig-row {
-      grid-template-columns: 1fr;
-      gap: var(--space-1);
-    }
   }
 </style>
