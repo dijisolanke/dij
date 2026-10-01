@@ -51,8 +51,11 @@ function badgeFor(platform: string) {
       {links.map((link) => (
         <li>
           {link.disabled ? (
-            <span class="disabled" aria-disabled="true" title="Coming soon">
-              {link.label}
+            <span class="disabled-wrap">
+              <button type="button" class="disabled" aria-disabled="true" aria-describedby="shop-tooltip">
+                {link.label}
+              </button>
+              <span class="tooltip" role="tooltip" id="shop-tooltip">Coming soon</span>
             </span>
           ) : (
             <a
@@ -83,6 +86,23 @@ function badgeFor(platform: string) {
     </ul>
   )}
 </aside>
+
+<script>
+  document.querySelectorAll<HTMLElement>('.disabled-wrap').forEach((wrap) => {
+    const button = wrap.querySelector('button');
+    button?.addEventListener('click', (event) => {
+      event.stopPropagation();
+      document.querySelectorAll('.disabled-wrap.show-tooltip').forEach((other) => {
+        if (other !== wrap) other.classList.remove('show-tooltip');
+      });
+      wrap.classList.toggle('show-tooltip');
+    });
+  });
+
+  document.addEventListener('click', () => {
+    document.querySelectorAll('.disabled-wrap.show-tooltip').forEach((wrap) => wrap.classList.remove('show-tooltip'));
+  });
+</script>
 
 <style>
   .sidebar {
@@ -134,9 +154,12 @@ function badgeFor(platform: string) {
 
   nav a,
   nav .disabled {
+    display: inline-block;
     text-decoration: none;
     font-size: 0.95rem;
     color: var(--color-text-muted);
+    padding: 0.4rem 0;
+    margin: -0.4rem 0;
     transition: color 0.15s ease;
   }
 
@@ -145,11 +168,45 @@ function badgeFor(platform: string) {
     color: var(--color-text);
   }
 
+  .disabled-wrap {
+    position: relative;
+    display: inline-block;
+  }
+
   nav .disabled {
+    appearance: none;
+    background: none;
+    border: none;
+    font-family: inherit;
     opacity: 0.45;
     cursor: not-allowed;
     user-select: none;
-    display: inline-block;
+  }
+
+  .tooltip {
+    position: absolute;
+    left: 0;
+    top: 100%;
+    margin-top: 2px;
+    background: var(--color-text);
+    color: var(--color-bg);
+    font-size: 0.75rem;
+    line-height: 1.4;
+    padding: 0.25rem 0.55rem;
+    border-radius: 4px;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+    z-index: 20;
+  }
+
+  .disabled-wrap:hover .tooltip,
+  .disabled-wrap:focus-within .tooltip,
+  .disabled-wrap.show-tooltip .tooltip {
+    opacity: 1;
+    visibility: visible;
   }
 
   .social {
