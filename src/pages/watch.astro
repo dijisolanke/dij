@@ -44,7 +44,7 @@ function vimeoEmbed(url: string): string | null {
             data-reveal={entry.revealStyle === 'tap-to-reveal' ? 'true' : undefined}
           >
             <div class="entry-cover">
-              <span class="reveal-hint">Tap to reveal</span>
+              {entry.revealStyle === 'tap-to-reveal' && <span class="reveal-hint">Tap to reveal</span>}
               <div class="entry-content">
                 {entry.title && <h2>{entry.title}</h2>}
                 {entry.body && <p>{entry.body}</p>}
