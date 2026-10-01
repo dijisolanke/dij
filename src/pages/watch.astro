@@ -30,7 +30,7 @@ function vimeoEmbed(url: string): string | null {
 ---
 
 <Layout title="Watch" description="Videos">
-  <main class="container page">
+  <main class="page">
     <h1>Watch</h1>
 
     {loadError && <p class="empty">Couldn't load this page right now. Please check back shortly.</p>}
@@ -110,8 +110,7 @@ function vimeoEmbed(url: string): string | null {
 
 <style>
   .page {
-    padding-top: var(--space-4);
-    padding-bottom: var(--space-6);
+    padding: var(--space-4) var(--space-3) var(--space-6);
   }
 
   .empty {
