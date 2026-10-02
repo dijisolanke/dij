@@ -15,10 +15,16 @@ try {
   loadError = true;
 }
 
+// Used whenever a provider has no thumbnail (Vimeo) or its thumbnails 404
+// (confirmed this happens: YouTube doesn't generate maxresdefault for every
+// upload). Replace this file any time — no code change needed.
+const FALLBACK_THUMBNAIL = '/video-thumbnail-fallback.svg';
+
 interface ResolvedEmbed {
   embedUrl: string;
-  thumbnailUrl: string | null;
-  thumbnailFallbackUrl: string | null;
+  // First candidate is tried first; on error the next one is tried, and so
+  // on. Always ends with FALLBACK_THUMBNAIL so there's always a last resort.
+  thumbnailCandidates: string[];
 }
 
 function youtubeEmbed(url: string): ResolvedEmbed | null {
@@ -28,8 +34,11 @@ function youtubeEmbed(url: string): ResolvedEmbed | null {
   if (!id) return null;
   return {
     embedUrl: `https://www.youtube.com/embed/${id}`,
-    thumbnailUrl: `https://img.youtube.com/vi/${id}/maxresdefault.jpg`,
-    thumbnailFallbackUrl: `https://img.youtube.com/vi/${id}/hqdefault.jpg`,
+    thumbnailCandidates: [
+      `https://img.youtube.com/vi/${id}/maxresdefault.jpg`,
+      `https://img.youtube.com/vi/${id}/hqdefault.jpg`,
+      FALLBACK_THUMBNAIL,
+    ],
   };
 }
 
@@ -38,8 +47,7 @@ function vimeoEmbed(url: string): ResolvedEmbed | null {
   if (!match) return null;
   return {
     embedUrl: `https://player.vimeo.com/video/${match[1]}`,
-    thumbnailUrl: null,
-    thumbnailFallbackUrl: null,
+    thumbnailCandidates: [FALLBACK_THUMBNAIL],
   };
 }
 ---
@@ -87,11 +95,13 @@ function vimeoEmbed(url: string): ResolvedEmbed | null {
                                   type="button"
                                   class="play-facade"
                                   aria-label={`Play ${m.title || entry.title || 'video'}`}
-                                  data-fallback-thumb={embed.thumbnailFallbackUrl || undefined}
                                 >
-                                  {embed.thumbnailUrl && (
-                                    <img src={embed.thumbnailUrl} alt="" loading="lazy" />
-                                  )}
+                                  <img
+                                    src={embed.thumbnailCandidates[0]}
+                                    data-thumb-candidates={embed.thumbnailCandidates.slice(1).join(',')}
+                                    alt=""
+                                    loading="lazy"
+                                  />
                                   <svg class="play-icon" viewBox="0 0 24 24" aria-hidden="true">
                                     <circle cx="12" cy="12" r="12" fill="rgba(255,255,255,0.9)" />
                                     <path d="M9.5 7.5v9l8-4.5-8-4.5z" fill="#1d1d1f" />
@@ -132,9 +142,16 @@ function vimeoEmbed(url: string): ResolvedEmbed | null {
   });
 
   document.querySelectorAll<HTMLImageElement>('.play-facade img').forEach((img) => {
-    const fallback = img.closest<HTMLElement>('.play-facade')?.dataset.fallbackThumb;
-    if (!fallback) return;
-    img.addEventListener('error', () => { img.src = fallback; }, { once: true });
+    img.addEventListener('error', function onError() {
+      const remaining = (img.dataset.thumbCandidates || '').split(',').filter(Boolean);
+      const next = remaining.shift();
+      img.dataset.thumbCandidates = remaining.join(',');
+      if (next) {
+        img.src = next;
+      } else {
+        img.removeEventListener('error', onError);
+      }
+    });
   });
 
   document.querySelectorAll<HTMLButtonElement>('.play-facade').forEach((button) => {
