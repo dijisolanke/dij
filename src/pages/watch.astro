@@ -229,7 +229,10 @@ function vimeoEmbed(url: string): ResolvedEmbed | null {
     background: var(--color-border);
   }
 
-  .embed-wrap iframe {
+  /* :global because this iframe is created at runtime by the click-to-play
+     script (see below), so Astro's compiler never sees it and can't attach
+     its usual scoping attribute to it for a normal scoped rule to match. */
+  .embed-wrap :global(iframe) {
     position: absolute;
     top: 0;
     left: 0;
