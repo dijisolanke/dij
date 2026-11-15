@@ -1,0 +1,246 @@
+---
+import { faChevronLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons';
+import Icon from './Icon.astro';
+import ProjectCard from './ProjectCard.astro';
+import type { Project } from '../lib/sanity';
+
+interface Props {
+  projects: Project[];
+}
+
+const { projects } = Astro.props;
+const multiple = projects.length > 1;
+---
+
+<div class="carousel" role="region" aria-roledescription="carousel" aria-label="Projects" data-carousel>
+  <div class="track" data-carousel-track>
+    {projects.map((project, i) => (
+      <div
+        class="slide"
+        role="group"
+        aria-roledescription="slide"
+        aria-label={`${i + 1} of ${projects.length}`}
+        data-carousel-slide
+        data-title={project.title}
+      >
+        <ProjectCard project={project} />
+      </div>
+    ))}
+  </div>
+
+  {multiple && (
+    <div class="controls">
+      <button type="button" class="arrow" data-carousel-prev disabled>
+        <Icon icon={faChevronLeft} />
+        <span class="visually-hidden">Previous project</span>
+      </button>
+
+      <div class="dots">
+        {projects.map((project, i) => (
+          <button
+            type="button"
+            class="dot"
+            data-carousel-dot={i}
+            aria-current={i === 0 ? 'true' : undefined}
+          >
+            <span class="visually-hidden">Show project {i + 1}: {project.title}</span>
+          </button>
+        ))}
+      </div>
+
+      <button type="button" class="arrow" data-carousel-next>
+        <Icon icon={faChevronRight} />
+        <span class="visually-hidden">Next project</span>
+      </button>
+    </div>
+  )}
+
+  <p class="visually-hidden" aria-live="polite" aria-atomic="true" data-carousel-status></p>
+</div>
+
+<script>
+  document.querySelectorAll<HTMLElement>('[data-carousel]').forEach((carousel) => {
+    const track = carousel.querySelector<HTMLElement>('[data-carousel-track]');
+    const slides = Array.from(carousel.querySelectorAll<HTMLElement>('[data-carousel-slide]'));
+    const prev = carousel.querySelector<HTMLButtonElement>('[data-carousel-prev]');
+    const next = carousel.querySelector<HTMLButtonElement>('[data-carousel-next]');
+    const dots = Array.from(carousel.querySelectorAll<HTMLButtonElement>('[data-carousel-dot]'));
+    const status = carousel.querySelector<HTMLElement>('[data-carousel-status]');
+    if (!track || slides.length < 2) return;
+
+    let current = 0;
+    // Only announce changes the visitor asked for via the controls,
+    // not every incidental scroll.
+    let announce = false;
+
+    const goTo = (index: number) => {
+      const target = slides[Math.max(0, Math.min(index, slides.length - 1))];
+      const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      track.scrollTo({ left: target.offsetLeft - track.offsetLeft, behavior: smooth ? 'smooth' : 'auto' });
+    };
+
+    const update = () => {
+      const index = Math.round(track.scrollLeft / (slides[0].offsetWidth || 1));
+      const clamped = Math.max(0, Math.min(index, slides.length - 1));
+      if (clamped === current) return;
+      current = clamped;
+      if (prev) prev.disabled = current === 0;
+      if (next) next.disabled = current === slides.length - 1;
+      dots.forEach((dot, i) => (i === current ? dot.setAttribute('aria-current', 'true') : dot.removeAttribute('aria-current')));
+      if (announce && status) {
+        status.textContent = `Project ${current + 1} of ${slides.length}: ${slides[current].dataset.title}`;
+        announce = false;
+      }
+    };
+
+    let frame = 0;
+    track.addEventListener('scroll', () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(update);
+    });
+
+    const step = (delta: number) => {
+      announce = true;
+      goTo(current + delta);
+    };
+
+    prev?.addEventListener('click', () => step(-1));
+    next?.addEventListener('click', () => step(1));
+    dots.forEach((dot, i) =>
+      dot.addEventListener('click', () => {
+        announce = true;
+        goTo(i);
+      })
+    );
+
+    carousel.addEventListener('keydown', (event) => {
+      // Leave arrow keys alone inside an open project overlay.
+      if ((event.target as HTMLElement).closest('dialog')) return;
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        step(-1);
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        step(1);
+      }
+    });
+
+    // Keep the current slide aligned after rotation / resize.
+    window.addEventListener('resize', () => goTo(current));
+  });
+</script>
+
+<style>
+  .track {
+    display: flex;
+    gap: var(--space-2);
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .track::-webkit-scrollbar {
+    display: none;
+  }
+
+  .slide {
+    flex: 0 0 100%;
+    display: flex;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+
+  /* Stretch every card to the tallest slide so the controls don't jump. */
+  .slide > :global(.project-card) {
+    flex: 1;
+  }
+
+  .controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+  }
+
+  .arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--tap);
+    height: var(--tap);
+    padding: 0;
+    border: 2px solid var(--color-text);
+    border-radius: 50%;
+    background: transparent;
+    color: var(--color-text);
+    font-size: 1rem;
+    cursor: pointer;
+    transition:
+      background-color 0.2s ease,
+      color 0.2s ease,
+      opacity 0.2s ease;
+  }
+
+  .arrow:hover:not(:disabled) {
+    background: var(--color-text);
+    color: var(--color-bg);
+  }
+
+  .arrow:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+
+  .dots {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  /* 44px tap target around a small visible dot. */
+  .dot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--tap);
+    height: var(--tap);
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+  }
+
+  .dot::before {
+    content: '';
+    width: 10px;
+    height: 10px;
+    border: 2px solid var(--color-text);
+    border-radius: 50%;
+    transition:
+      background-color 0.2s ease,
+      transform 0.2s ease;
+  }
+
+  .dot[aria-current='true']::before {
+    background: var(--color-text);
+    transform: scale(1.2);
+  }
+
+  .dot:hover::before {
+    background: var(--color-text-muted);
+  }
+
+  .dot[aria-current='true']:hover::before {
+    background: var(--color-text);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .dot::before,
+    .arrow {
+      transition: none;
+    }
+  }
+</style>

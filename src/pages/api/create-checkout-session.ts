@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { stripe } from '../../lib/stripe';
-import { getShopItemBySlug, urlFor } from '../../lib/sanity';
+import { getShopItemBySlug, getSiteSettings, urlFor } from '../../lib/sanity';
 
 export const prerender = false;
 
@@ -9,6 +9,13 @@ export const POST: APIRoute = async ({ request }) => {
 
   if (!slug || typeof slug !== 'string') {
     return new Response(JSON.stringify({ error: 'Missing slug' }), { status: 400 });
+  }
+
+  // Server-side check so checkout stays closed while the shop is switched
+  // off in Sanity, even if someone calls this endpoint directly.
+  const settings = await getSiteSettings();
+  if (!settings.shopEnabled) {
+    return new Response(JSON.stringify({ error: 'Shop is not open yet' }), { status: 403 });
   }
 
   const item = await getShopItemBySlug(slug);

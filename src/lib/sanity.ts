@@ -32,13 +32,16 @@ export interface About {
   _id: string;
   name: string;
   heroImage: SanityImage;
-  bio: string;
+  bio?: string;
+  heroCta?: { label?: string; url?: string };
 }
 
 export interface SiteSettings {
   siteName: string;
+  displayName?: string;
   tagline?: string;
   socialLinks?: SocialLink[];
+  soundcloudUrl?: string;
   shopEnabled: boolean;
 }
 
@@ -48,6 +51,7 @@ export interface Gig {
   date: string;
   venue: string;
   city: string;
+  ticketUrl?: string;
   soldOut?: boolean;
   notes?: string;
 }
@@ -99,7 +103,7 @@ export async function getAbout(): Promise<About | null> {
 
 export async function getSiteSettings(): Promise<SiteSettings> {
   const settings = await sanity.fetch<SiteSettings | null>(`*[_type == "siteSettings"][0]`);
-  return settings ?? { siteName: 'Artist Name', shopEnabled: true };
+  return settings ?? { siteName: 'Diji', shopEnabled: false };
 }
 
 export async function getUpcomingGigs(): Promise<Gig[]> {

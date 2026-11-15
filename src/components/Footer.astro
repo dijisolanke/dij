@@ -1,18 +1,23 @@
 ---
+interface Props {
+  siteName: string;
+}
+
+const { siteName } = Astro.props;
 const year = new Date().getFullYear();
 ---
 
 <footer class="footer">
   <div class="container">
-    <p>&copy; {year}. All rights reserved.</p>
+    <p>&copy; {year} {siteName}. All rights reserved.</p>
   </div>
 </footer>
 
 <style>
   .footer {
     border-top: 1px solid var(--color-border);
-    margin-top: var(--space-6);
     padding: var(--space-3) 0;
+    text-align: center;
   }
 
   .footer p {

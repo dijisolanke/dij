@@ -1,0 +1,407 @@
+---
+import { faXmark } from '@fortawesome/free-solid-svg-icons';
+import Icon from './Icon.astro';
+import { urlFor, type Project } from '../lib/sanity';
+
+interface Props {
+  project: Project;
+}
+
+const { project } = Astro.props;
+const dialogId = `project-${project._id}`;
+const titleId = `${dialogId}-title`;
+const paragraphs = project.description ? project.description.split(/\n\s*\n/).filter(Boolean) : [];
+---
+
+<article class="project-card">
+  <div class="card-image">
+    {project.image ? (
+      <img
+        src={urlFor(project.image).width(800).height(600).fit('crop').auto('format').url()}
+        srcset={[400, 800, 1200]
+          .map((w) => `${urlFor(project.image!).width(w).height(Math.round(w * 0.75)).fit('crop').auto('format').url()} ${w}w`)
+          .join(', ')}
+        sizes="(min-width: 800px) 480px, 100vw"
+        alt=""
+        loading="lazy"
+        decoding="async"
+        width="800"
+        height="600"
+      />
+    ) : (
+      <div class="image-placeholder" aria-hidden="true"></div>
+    )}
+  </div>
+
+  <div class="card-body">
+    <h3>
+      {/* Stretched over the whole card (see ::after), so the card is one big target. */}
+      <button type="button" class="card-open" aria-haspopup="dialog" aria-controls={dialogId}>
+        {project.title}
+      </button>
+    </h3>
+    {paragraphs[0] && <p class="excerpt">{paragraphs[0]}</p>}
+    <span class="read-more" aria-hidden="true">Read more &rarr;</span>
+  </div>
+</article>
+
+<dialog id={dialogId} class="project-dialog" aria-labelledby={titleId}>
+  <button type="button" class="dialog-close" data-dialog-close autofocus>
+    <Icon icon={faXmark} />
+    <span class="visually-hidden">Close</span>
+  </button>
+
+  <div class="dialog-stage">
+    <article class="dialog-content">
+      {project.image && (
+        <img
+          src={urlFor(project.image).width(1400).auto('format').url()}
+          srcset={[700, 1400, 2000].map((w) => `${urlFor(project.image!).width(w).auto('format').url()} ${w}w`).join(', ')}
+          sizes="(min-width: 840px) 800px, 100vw"
+          alt=""
+          loading="lazy"
+          decoding="async"
+        />
+      )}
+
+      <div class="dialog-text">
+        <h2 id={titleId}>{project.title}</h2>
+        {paragraphs.map((p) => <p>{p}</p>)}
+
+        {project.quote?.text && (
+          <blockquote>
+            <p>&ldquo;{project.quote.text}&rdquo;</p>
+            {project.quote.attribution && <cite>&mdash; {project.quote.attribution}</cite>}
+          </blockquote>
+        )}
+
+        {project.links && project.links.length > 0 && (
+          <ul class="links">
+            {project.links.map((link) => (
+              <li>
+                <a href={link.url} target="_blank" rel="noopener noreferrer" class="button">
+                  {link.label}
+                  <span class="visually-hidden">(opens in a new tab)</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </article>
+
+    <p class="dismiss-hint" aria-hidden="true">Tap outside or press Esc to close</p>
+  </div>
+</dialog>
+
+<script>
+  const reduceMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const CLOSE_MS = 350;
+
+  function openDialog(dialog: HTMLDialogElement) {
+    dialog.showModal();
+    dialog.scrollTop = 0;
+    // Next frame, so the transition runs from the closed state.
+    requestAnimationFrame(() => dialog.classList.add('is-open'));
+  }
+
+  function closeDialog(dialog: HTMLDialogElement) {
+    if (!dialog.open || dialog.classList.contains('is-closing')) return;
+    dialog.classList.remove('is-open');
+    if (reduceMotion()) {
+      dialog.close();
+      return;
+    }
+    dialog.classList.add('is-closing');
+    window.setTimeout(() => {
+      dialog.classList.remove('is-closing');
+      dialog.close(); // Browser returns focus to the card button.
+    }, CLOSE_MS);
+  }
+
+  document.querySelectorAll<HTMLButtonElement>('.card-open').forEach((button) => {
+    const dialog = document.getElementById(button.getAttribute('aria-controls') || '') as HTMLDialogElement | null;
+    if (!dialog) return;
+
+    button.addEventListener('click', () => openDialog(dialog));
+
+    dialog.querySelector('[data-dialog-close]')?.addEventListener('click', () => closeDialog(dialog));
+
+    // Anywhere that isn't the image/text column closes: the dark edges,
+    // the hint, the gutters on wide screens.
+    dialog.addEventListener('click', (event) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.dialog-content, .dialog-close')) closeDialog(dialog);
+    });
+
+    // Esc: run the same eased close instead of the instant native one.
+    dialog.addEventListener('cancel', (event) => {
+      event.preventDefault();
+      closeDialog(dialog);
+    });
+  });
+</script>
+
+<style>
+  /* ---------- Card: image left, text right (stacked on phones) ---------- */
+
+  .project-card {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr;
+    background: var(--color-surface);
+    transition: background-color 0.25s ease;
+  }
+
+  @media (min-width: 640px) {
+    .project-card {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      align-items: center;
+    }
+  }
+
+  .project-card:hover,
+  .project-card:focus-within {
+    background: var(--color-surface-raised);
+  }
+
+  .card-image {
+    overflow: hidden;
+    aspect-ratio: 4 / 3;
+  }
+
+  .card-image img,
+  .image-placeholder {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background: var(--color-surface-raised);
+    transition: transform 0.7s var(--ease-out);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .project-card:hover .card-image img {
+      transform: scale(1.04);
+    }
+  }
+
+  .card-body {
+    padding: var(--space-3) var(--space-2);
+  }
+
+  @media (min-width: 640px) {
+    .card-body {
+      padding: var(--space-3) var(--space-4);
+    }
+  }
+
+  .card-body h3 {
+    margin-bottom: var(--space-1);
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: clamp(1.4rem, 4vw, 2rem);
+    text-transform: uppercase;
+  }
+
+  .card-open {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    text-transform: inherit;
+    cursor: pointer;
+  }
+
+  .card-open::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+  }
+
+  .card-open:focus-visible {
+    outline: none;
+  }
+
+  .card-open:focus-visible::after {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 3px;
+  }
+
+  .excerpt {
+    color: var(--color-text-muted);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .read-more {
+    font-weight: 700;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    border-bottom: 2px solid currentColor;
+    padding-bottom: 2px;
+  }
+
+  /* ---------- Full-screen overlay ---------- */
+
+  .project-dialog {
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    max-height: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: #000;
+    color: var(--color-text);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    /* Signals that clicking the black surround closes the overlay. */
+    cursor: zoom-out;
+    opacity: 0;
+    transition: opacity var(--close-ms, 0.35s) ease;
+  }
+
+  .project-dialog::backdrop {
+    background: #000;
+    opacity: 0;
+    transition: opacity 0.35s ease;
+  }
+
+  .project-dialog.is-open,
+  .project-dialog.is-open::backdrop {
+    opacity: 1;
+  }
+
+  .dialog-stage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100%;
+    padding: calc(var(--tap) + var(--space-3)) var(--space-2) var(--space-4);
+  }
+
+  @media (min-width: 840px) {
+    .dialog-stage {
+      padding: var(--space-5) var(--space-4);
+    }
+  }
+
+  .dialog-content {
+    width: 100%;
+    max-width: 800px;
+    cursor: auto;
+    transform: translateY(28px) scale(0.98);
+    transition: transform 0.45s var(--ease-out);
+  }
+
+  .is-open .dialog-content {
+    transform: none;
+  }
+
+  .dialog-content img {
+    width: 100%;
+    height: auto;
+    max-height: 70vh;
+    object-fit: contain;
+    background: var(--color-surface);
+  }
+
+  .dialog-text {
+    padding-top: var(--space-3);
+  }
+
+  .dialog-text h2 {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: clamp(1.8rem, 6vw, 3rem);
+    text-transform: uppercase;
+  }
+
+  .dialog-text p {
+    color: #d4d4d4;
+    max-width: 65ch;
+  }
+
+  blockquote {
+    margin: var(--space-3) 0;
+    padding-left: var(--space-2);
+    border-left: 3px solid var(--color-text);
+  }
+
+  blockquote p {
+    font-size: 1.15rem;
+    font-style: italic;
+    color: var(--color-text);
+    margin-bottom: var(--space-1);
+  }
+
+  cite {
+    font-style: normal;
+    font-size: 0.9rem;
+    color: var(--color-text-muted);
+  }
+
+  .links {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+    margin: var(--space-3) 0 0;
+    padding: 0;
+  }
+
+  .dismiss-hint {
+    margin: var(--space-4) 0 0;
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .dialog-close {
+    position: fixed;
+    top: var(--space-1);
+    right: var(--space-1);
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 3rem;
+    height: 3rem;
+    padding: 0;
+    border: 2px solid var(--color-text);
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.6);
+    color: var(--color-text);
+    font-size: 1.4rem;
+    cursor: pointer;
+    transition:
+      background-color 0.2s ease,
+      color 0.2s ease;
+  }
+
+  @media (min-width: 840px) {
+    .dialog-close {
+      top: var(--space-3);
+      right: var(--space-3);
+    }
+  }
+
+  .dialog-close:hover {
+    background: var(--color-text);
+    color: var(--color-bg);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .project-dialog,
+    .project-dialog::backdrop,
+    .dialog-content {
+      transition: none;
+    }
+  }
+</style>

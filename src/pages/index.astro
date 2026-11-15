@@ -1,76 +1,578 @@
 ---
 export const prerender = false;
 
+import { faChevronDown } from '@fortawesome/free-solid-svg-icons';
 import Layout from '../layouts/Layout.astro';
-import { getAbout, urlFor } from '../lib/sanity';
+import Icon from '../components/Icon.astro';
+import VideoCard from '../components/VideoCard.astro';
+import ProjectCarousel from '../components/ProjectCarousel.astro';
+import SocialLinks from '../components/SocialLinks.astro';
+import {
+  getAbout,
+  getProjects,
+  getShopItems,
+  getSiteSettings,
+  getUpcomingGigs,
+  getWatchEntries,
+  urlFor,
+  type SiteSettings,
+} from '../lib/sanity';
+import { findFeaturedVideo } from '../lib/video';
 
 Astro.response.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
 
-let about: Awaited<ReturnType<typeof getAbout>> = null;
-let loadError = false;
+// Each section loads independently, so one failing query only blanks its own section.
+const [aboutRes, settingsRes, gigsRes, projectsRes, shopRes, watchRes] = await Promise.allSettled([
+  getAbout(),
+  getSiteSettings(),
+  getUpcomingGigs(),
+  getProjects(),
+  getShopItems(),
+  getWatchEntries(),
+]);
 
-try {
-  about = await getAbout();
-} catch {
-  loadError = true;
+const about = aboutRes.status === 'fulfilled' ? aboutRes.value : null;
+const settings: SiteSettings =
+  settingsRes.status === 'fulfilled' ? settingsRes.value : { siteName: 'Diji', shopEnabled: false };
+const gigs = gigsRes.status === 'fulfilled' ? gigsRes.value : null;
+const projects = projectsRes.status === 'fulfilled' ? projectsRes.value : null;
+const shopItems = shopRes.status === 'fulfilled' ? shopRes.value : null;
+const watchEntries = watchRes.status === 'fulfilled' ? watchRes.value : null;
+
+const artistName = about?.name || settings.siteName || 'Diji';
+const featured = watchEntries ? findFeaturedVideo(watchEntries) : null;
+const heroCta = about?.heroCta?.label && about.heroCta.url ? about.heroCta : null;
+
+const soundcloudEmbed = settings.soundcloudUrl
+  ? `https://w.soundcloud.com/player/?url=${encodeURIComponent(settings.soundcloudUrl)}` +
+    '&color=%23111111&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false'
+  : null;
+
+const isUrl = (value?: string) => !!value && /^https?:\/\//i.test(value.trim());
+
+function formatGigDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'Europe/London',
+  });
 }
 
-const paragraphs = about?.bio ? about.bio.split(/\n\s*\n/).filter(Boolean) : [];
+const formatPrice = (price: number, currency: string) =>
+  new Intl.NumberFormat('en-GB', { style: 'currency', currency: currency || 'GBP' }).format(price);
+
+const description = about?.bio?.split(/\n\s*\n/)[0] || `${artistName} — music, videos, live dates and projects.`;
 ---
 
-<Layout title={about ? `About ${about.name}` : 'Artist Name'} description={about?.bio}>
-  <main class="container page">
-    {loadError && <p class="empty">Couldn't load this page right now. Please check back shortly.</p>}
+<Layout title={artistName} description={description} settings={settings} overHero>
+  <main id="main">
+    <!-- ================= Hero ================= -->
+    <section id="hero" class="hero" aria-labelledby="hero-title">
+      {about?.heroImage && (
+        <picture>
+          <source
+            media="(max-width: 799px)"
+            srcset={[600, 900, 1200]
+              .map((w) => `${urlFor(about.heroImage).width(w).height(Math.round(w * 1.78)).fit('crop').auto('format').quality(80).url()} ${w}w`)
+              .join(', ')}
+            sizes="100vw"
+          />
+          <img
+            class="hero-image"
+            src={urlFor(about.heroImage).width(1920).height(1080).fit('crop').auto('format').quality(80).url()}
+            srcset={[1280, 1920, 2560]
+              .map((w) => `${urlFor(about.heroImage).width(w).height(Math.round(w * 0.5625)).fit('crop').auto('format').quality(80).url()} ${w}w`)
+              .join(', ')}
+            sizes="100vw"
+            alt=""
+            fetchpriority="high"
+            decoding="async"
+          />
+        </picture>
+      )}
+      <div class="hero-content">
+        {/* The page's h1 for screen readers / SEO; visually the photo leads. */}
+        <h1 id="hero-title" class="visually-hidden">{artistName}</h1>
+        {heroCta && (
+          <a href={heroCta.url} class="button hero-button" target="_blank" rel="noopener noreferrer">
+            {heroCta.label}
+            <span class="visually-hidden">(opens in a new tab)</span>
+          </a>
+        )}
+        <a href="#music" class="scroll-cue" style="opacity:0.3">
+          <span class="scroll-cue-label" aria-hidden="true">Scroll</span>
+          <span class="scroll-cue-icon" aria-hidden="true">
+            <Icon icon={faChevronDown}  />
+          </span>
+          <span class="visually-hidden">Scroll down to music</span>
+        </a>
+      </div>
+    </section>
 
-    {!loadError && !about && (
-      <p class="empty">Content coming soon.</p>
-    )}
+    <!-- ================= Music ================= -->
+    <section id="music" class="section" aria-labelledby="music-title">
+      <div class="container narrow" data-reveal-on-scroll>
+        <h2 id="music-title" class="section-title">Music Archive</h2>
+        {soundcloudEmbed ? (
+          <>
+            <iframe
+              class="soundcloud"
+              src={soundcloudEmbed}
+              title={`${artistName} on SoundCloud`}
+              loading="lazy"
+              allow="autoplay"
+            ></iframe>
+            <p class="music-link">
+              <a href={settings.soundcloudUrl} target="_blank" rel="noopener noreferrer">
+                Listen on SoundCloud<span class="visually-hidden"> (opens in a new tab)</span>
+              </a>
+            </p>
+          </>
+        ) : (
+          <p class="empty">New music coming soon.</p>
+        )}
+      </div>
+    </section>
 
-    {about && (
-      <article class="about">
-        <h1>About {about.name}</h1>
+    <!-- ================= Watch ================= -->
+    <section id="watch" class="section" aria-labelledby="watch-title">
+      <div class="container narrow" data-reveal-on-scroll>
+        <h2 id="watch-title" class="section-title">Watch</h2>
+        {watchEntries === null && <p class="empty">Couldn't load videos right now. Please check back shortly.</p>}
+        {watchEntries && !featured && watchEntries.length === 0 && <p class="empty">Videos coming soon.</p>}
+        {featured && <VideoCard video={featured.video} fallbackTitle={featured.entry.title} />}
+        {watchEntries && watchEntries.length > 0 && (
+          <p class="section-cta">
+            <a href="/watch" class="button">See more</a>
+          </p>
+        )}
+      </div>
+    </section>
 
-        <img
-          src={urlFor(about.heroImage).width(1000).height(1250).fit('crop').url()}
-          alt={about.name}
-          width="250"
-          height="370"
-          class="hero-image"
-        />
+    <!-- ================= Live ================= -->
+    <section id="live" class="section" aria-labelledby="live-title">
+      <div class="container narrow" data-reveal-on-scroll>
+        <h2 id="live-title" class="section-title">Live</h2>
+        {gigs === null && <p class="empty">Couldn't load live dates right now. Please check back shortly.</p>}
+        {gigs && gigs.length === 0 && <p class="empty">No shows announced yet — check back soon.</p>}
+        {gigs && gigs.length > 0 && (
+          <ul class="gigs">
+            {gigs.map((gig) => {
+              const date = formatGigDate(gig.date);
+              const ticketUrl = gig.ticketUrl || (isUrl(gig.notes) ? gig.notes : undefined);
+              return (
+                <li class="gig">
+                  <time class="gig-date" datetime={gig.date}>{date}</time>
+                  <div class="gig-details">
+                    {gig.title && <span class="gig-title">{gig.title}</span>}
+                    <span class="gig-venue">{gig.venue}</span>
+                    <span class="gig-city">{gig.city}</span>
+                    {gig.notes && !isUrl(gig.notes) && <span class="gig-notes">{gig.notes}</span>}
+                  </div>
+                  <div class="gig-action">
+                    {gig.soldOut ? (
+                      <span class="sold-out">Sold out</span>
+                    ) : (
+                      ticketUrl && (
+                        <a href={ticketUrl} class="button" target="_blank" rel="noopener noreferrer">
+                          Tickets
+                          <span class="visually-hidden">for {gig.venue}, {date} (opens in a new tab)</span>
+                        </a>
+                      )
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </section>
 
-        <div class="bio">
-          {paragraphs.map((paragraph) => (
-            <p>{paragraph}</p>
-          ))}
+    <!-- ================= Projects ================= -->
+    <section id="projects" class="section" aria-labelledby="projects-title">
+      <div class="container narrow">
+        <h2 id="projects-title" class="section-title" data-reveal-on-scroll>Projects</h2>
+        {projects === null && <p class="empty">Couldn't load projects right now. Please check back shortly.</p>}
+        {projects && projects.length === 0 && <p class="empty">Nothing here yet — check back soon.</p>}
+        {projects && projects.length > 0 && (
+          <div data-reveal-on-scroll>
+            <ProjectCarousel projects={projects} />
+          </div>
+        )}
+      </div>
+    </section>
+
+    <!-- ================= Shop ================= -->
+    <section id="shop" class="section" aria-labelledby="shop-title">
+      <div class="container" data-reveal-on-scroll>
+        <h2 id="shop-title" class="section-title">Shop</h2>
+        {!settings.shopEnabled ? (
+          <p class="coming-soon">Coming soon</p>
+        ) : shopItems === null ? (
+          <p class="empty">Couldn't load the shop right now. Please check back shortly.</p>
+        ) : shopItems.length === 0 ? (
+          <p class="coming-soon">Coming soon</p>
+        ) : (
+          <ul class="shop-grid">
+            {shopItems.map((item) => (
+              <li>
+                <a href={`/shop/${item.slug.current}`} class="shop-card">
+                  <div class="shop-image">
+                    <img
+                      src={urlFor(item.images[0]).width(600).height(600).fit('crop').auto('format').url()}
+                      srcset={[400, 600, 900]
+                        .map((w) => `${urlFor(item.images[0]).width(w).height(w).fit('crop').auto('format').url()} ${w}w`)
+                        .join(', ')}
+                      sizes="(min-width: 1080px) 340px, (min-width: 640px) 33vw, 100vw"
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      width="600"
+                      height="600"
+                    />
+                  </div>
+                  <span class="shop-title">{item.title}</span>
+                  <span class="shop-price">{item.soldOut ? 'Sold out' : formatPrice(item.price, item.currency)}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
+
+    <!-- ================= Get Updates ================= -->
+    {settings.socialLinks && settings.socialLinks.length > 0 && (
+      <section id="updates" class="section" aria-labelledby="updates-title">
+        <div class="container" data-reveal-on-scroll>
+          <h3 id="updates-title" class="section-title get-updates">Get Updates</h3>
+          <SocialLinks links={settings.socialLinks} artistName={artistName} size="large" />
         </div>
-      </article>
+      </section>
     )}
   </main>
 </Layout>
 
 <style>
-  .page {
-    padding-top: var(--space-4);
-    padding-bottom: var(--space-6);
+  /* ---------- Hero ---------- */
+
+  .hero {
+    position: relative;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    min-height: 100vh;
+    min-height: 100svh;
+    overflow: hidden;
+    background: var(--color-surface);
   }
 
-  .empty {
-    color: var(--color-text-muted);
-  }
-
-  .about {
-    max-width: 760px;
+  .hero picture,
+  .hero-image {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
   }
 
   .hero-image {
-    width: 100%;
-    max-width: 560px;
-    border-radius: 4px;
     object-fit: cover;
-    margin-bottom: var(--space-4);
   }
 
-  .bio p {
-    max-width: 65ch;
+  /* Bottom fade keeps the headline legible on any photo and blends into the page. */
+  .hero::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to bottom, transparent 45%, rgba(0, 0, 0, 0.35) 70%, #000 100%);
+    pointer-events: none;
+  }
+
+  .hero-content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-3);
+    padding: 0 var(--space-2) var(--space-5);
+    text-align: center;
+  }
+
+  .scroll-cue {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+    min-width: var(--tap);
+    padding: var(--space-1);
+    text-decoration: none;
+  }
+
+  .scroll-cue-label {
+    font-weight: 700;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3em;
+    /* Optically re-centre: letter-spacing adds trailing space. */
+    margin-right: -0.3em;
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5);
+  }
+
+  .scroll-cue-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 3.25rem;
+    height: 3.25rem;
+    border: 2px solid var(--color-text);
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.25);
+    font-size: 1.15rem;
+    transition:
+      background-color 0.2s ease,
+      color 0.2s ease;
+  }
+
+  .scroll-cue:hover .scroll-cue-icon,
+  .scroll-cue:focus-visible .scroll-cue-icon {
+    background: var(--color-text);
+    color: var(--color-bg);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .hero-button,
+    .scroll-cue {
+      animation: hero-in 1.1s var(--ease-out) 0.3s both;
+    }
+
+    .scroll-cue-icon :global(.icon) {
+      animation: scroll-nudge 1.8s ease-in-out 1.4s infinite;
+    }
+
+    @keyframes hero-in {
+      from {
+        opacity: 0;
+        transform: translateY(40px);
+      }
+    }
+
+    @keyframes scroll-nudge {
+      0%,
+      100% {
+        transform: translateY(-3px);
+        opacity: 1;
+      }
+      50% {
+        transform: translateY(5px);
+        opacity: 0.6;
+      }
+    }
+  }
+
+  /* ---------- Shared ---------- */
+
+  .narrow {
+    max-width: 900px;
+  }
+
+  .section-cta {
+    margin: var(--space-4) 0 0;
+    text-align: center;
+  }
+
+  /* ---------- Music ---------- */
+
+  .soundcloud {
+    display: block;
+    width: 100%;
+    height: 380px;
+    border: 0;
+    background: var(--color-surface);
+  }
+
+  @media (min-width: 640px) {
+    .soundcloud {
+      height: 450px;
+    }
+  }
+
+  .music-link {
+    margin: var(--space-2) 0 0;
+    text-align: center;
+    font-size: 0.9rem;
+  }
+
+  .music-link a {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--tap);
+    color: var(--color-text-muted);
+  }
+
+  .music-link a:hover {
+    color: var(--color-text);
+  }
+
+  /* ---------- Live ---------- */
+
+  .gigs {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .gig {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-1);
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  @media (min-width: 700px) {
+    .gig {
+      grid-template-columns: 9rem minmax(0, 1fr) auto;
+      align-items: center;
+      gap: var(--space-3);
+    }
+  }
+
+  .gig-date {
+    font-weight: 900;
+    font-size: 1.1rem;
+    text-transform: uppercase;
+  }
+
+  .gig-details {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .gig-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-text-muted);
+  }
+
+  .gig-venue {
+    font-weight: 700;
+    font-size: 1.15rem;
+  }
+
+  .gig-city,
+  .gig-notes {
+    color: var(--color-text-muted);
+  }
+
+  .gig-notes {
+    font-size: 0.9rem;
+  }
+
+  .gig-action {
+    margin-top: var(--space-1);
+  }
+
+  @media (min-width: 700px) {
+    .gig-action {
+      margin-top: 0;
+    }
+  }
+
+  @media (max-width: 699px) {
+    .gig-action .button {
+      width: 100%;
+    }
+  }
+
+  .sold-out {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    border: 2px solid var(--color-border);
+    color: var(--color-text-muted);
+    font-weight: 700;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    text-decoration: line-through;
+  }
+
+  /* ---------- Shop ---------- */
+
+  .coming-soon {
+    margin: 0;
+    text-align: center;
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: clamp(1.4rem, 5vw, 2rem);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-text-muted);
+  }
+
+  .shop-grid {
+    list-style: none;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-4) var(--space-3);
+    margin: 0;
+    padding: 0;
+  }
+
+  @media (min-width: 480px) {
+    .shop-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (min-width: 900px) {
+    .shop-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  .shop-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    text-decoration: none;
+    text-align: center;
+  }
+
+  .shop-image {
+    overflow: hidden;
+    margin-bottom: var(--space-1);
+    background: var(--color-surface);
+  }
+
+  .shop-image img {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    transition: transform 0.6s var(--ease-out);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .shop-card:hover .shop-image img {
+      transform: scale(1.05);
+    }
+  }
+
+  .shop-title {
+    font-weight: 900;
+    font-size: 1.15rem;
+    text-transform: uppercase;
+  }
+
+  .shop-price {
+    color: var(--color-text-muted);
+  }
+  .get-updates{
+    font-size: large;
   }
 </style>

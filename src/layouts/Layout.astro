@@ -1,15 +1,31 @@
 ---
-import Sidebar from '../components/Sidebar.astro';
+import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
+import { getSiteSettings, type SiteSettings } from '../lib/sanity';
 import '../styles/global.css';
 
 interface Props {
   title: string;
   description?: string;
-  bare?: boolean;
+  /** Pass when the page already fetched settings, to skip a second fetch. */
+  settings?: SiteSettings;
+  /** Landing page only: header floats over the hero. */
+  overHero?: boolean;
 }
 
-const { title, description = '', bare = false } = Astro.props;
+const { title, description = '', overHero = false } = Astro.props;
+
+let settings = Astro.props.settings;
+if (!settings) {
+  try {
+    settings = await getSiteSettings();
+  } catch {
+    // Sanity unreachable — fall back to defaults rather than breaking the page.
+  }
+}
+const siteName = settings?.siteName || 'Diji';
+const displayName = settings?.displayName || 'Diji';
+const socialLinks = settings?.socialLinks || [];
 ---
 
 <!doctype html>
@@ -17,41 +33,40 @@ const { title, description = '', bare = false } = Astro.props;
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#000000" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="description" content={description} />
     <title>{title}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;700;900&display=swap"
+    />
   </head>
   <body>
-    {bare ? (
-      <slot />
-    ) : (
-      <div class="site">
-        <Sidebar />
-        <div class="site-main">
-          <slot />
-          <Footer />
-        </div>
-      </div>
-    )}
+    <a href="#main" class="skip-link">Skip to content</a>
+    <Header siteName={displayName} socialLinks={socialLinks} overHero={overHero} />
+    <slot />
+    <Footer siteName={siteName} />
+
+    <script>
+      // Fade/slide sections in as they scroll into view (see global.css).
+      const targets = document.querySelectorAll('[data-reveal-on-scroll]');
+      if (targets.length && 'IntersectionObserver' in window) {
+        document.documentElement.classList.add('js-reveal');
+        const observer = new IntersectionObserver(
+          (entries) => {
+            entries.forEach((entry) => {
+              if (!entry.isIntersecting) return;
+              entry.target.classList.add('is-visible');
+              observer.unobserve(entry.target);
+            });
+          },
+          { rootMargin: '0px 0px -10% 0px' }
+        );
+        targets.forEach((el) => observer.observe(el));
+      }
+    </script>
   </body>
 </html>
-
-<style>
-  .site {
-    display: flex;
-    min-height: 100svh;
-  }
-
-  .site-main {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-  }
-
-  @media (max-width: 800px) {
-    .site {
-      flex-direction: column;
-    }
-  }
-</style>

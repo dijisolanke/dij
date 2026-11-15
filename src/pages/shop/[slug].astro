@@ -1,28 +1,39 @@
 ---
 export const prerender = false;
 
+import { faArrowLeft } from '@fortawesome/free-solid-svg-icons';
 import Layout from '../../layouts/Layout.astro';
 import Gallery from '../../components/Gallery.astro';
-import { getShopItemBySlug } from '../../lib/sanity';
+import Icon from '../../components/Icon.astro';
+import { getShopItemBySlug, getSiteSettings, type SiteSettings } from '../../lib/sanity';
 
 const { slug } = Astro.params;
 
 let item: Awaited<ReturnType<typeof getShopItemBySlug>> = null;
+let settings: SiteSettings | undefined;
 let loadError = false;
 
 try {
-  item = await getShopItemBySlug(slug!);
+  [item, settings] = await Promise.all([getShopItemBySlug(slug!), getSiteSettings()]);
 } catch {
   loadError = true;
 }
 
 if (!loadError && !item) {
-  return Astro.redirect('/shop');
+  return Astro.redirect('/#shop');
 }
+
+// TODO(stripe launch): see docs/stripe-launch-checklist.md before turning the shop on.
+const shopEnabled = settings?.shopEnabled ?? false;
 ---
 
-<Layout title={item ? item.title : 'Shop'} description={item?.description}>
-  <main class="container page">
+<Layout title={item ? item.title : 'Shop'} description={item?.description} settings={settings}>
+  <main id="main" class="container page">
+    <a href="/#shop" class="back-link">
+      <Icon icon={faArrowLeft} />
+      Back to shop
+    </a>
+
     {loadError && <p class="empty">Couldn't load this item right now. Please check back shortly.</p>}
 
     {item && (
@@ -39,12 +50,14 @@ if (!loadError && !item) {
           </p>
           {item.description && <p class="description">{item.description}</p>}
 
-          {item.soldOut ? (
-            <p class="sold-out">Sold out</p>
+          {!shopEnabled ? (
+            <p class="status">Coming soon</p>
+          ) : item.soldOut ? (
+            <p class="status">Sold out</p>
           ) : (
-            <button id="buy-button" data-slug={item.slug.current}>Buy</button>
+            <button id="buy-button" class="button buy" data-slug={item.slug.current}>Buy</button>
           )}
-          <p id="buy-error" class="buy-error" hidden>Something went wrong — please try again.</p>
+          <p id="buy-error" class="buy-error" role="alert" hidden>Something went wrong — please try again.</p>
         </div>
       </div>
     )}
@@ -58,6 +71,7 @@ if (!loadError && !item) {
   button?.addEventListener('click', async () => {
     const slug = button.getAttribute('data-slug');
     button.setAttribute('disabled', 'true');
+    button.setAttribute('aria-busy', 'true');
     button.textContent = 'Redirecting…';
     errorEl?.setAttribute('hidden', 'true');
 
@@ -72,6 +86,7 @@ if (!loadError && !item) {
       window.location.href = data.url;
     } catch {
       button.removeAttribute('disabled');
+      button.removeAttribute('aria-busy');
       button.textContent = 'Buy';
       errorEl?.removeAttribute('hidden');
     }
@@ -80,12 +95,26 @@ if (!loadError && !item) {
 
 <style>
   .page {
-    padding-top: var(--space-4);
+    padding-top: var(--space-3);
     padding-bottom: var(--space-6);
   }
 
-  .empty {
-    color: var(--color-text-muted);
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: var(--tap);
+    margin-bottom: var(--space-3);
+    font-weight: 700;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    text-decoration: none;
+  }
+
+  .back-link:hover {
+    text-decoration: underline;
+    text-underline-offset: 4px;
   }
 
   .detail {
@@ -95,38 +124,48 @@ if (!loadError && !item) {
     align-items: start;
   }
 
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: clamp(2rem, 6vw, 3rem);
+    text-transform: uppercase;
+  }
+
   .price {
-    font-size: 1.1rem;
-    color: var(--color-text);
+    font-size: 1.25rem;
+    font-weight: 700;
   }
 
   .description {
-    max-width: 40ch;
+    max-width: 45ch;
+    color: var(--color-text-muted);
   }
 
-  button {
-    font: inherit;
-    background: var(--color-accent);
-    color: var(--color-bg);
-    border: none;
-    border-radius: 999px;
-    padding: 0.75rem 2rem;
-    cursor: pointer;
+  .buy {
+    width: 100%;
+    max-width: 320px;
   }
 
-  button:disabled {
-    opacity: 0.6;
-    cursor: default;
+  .status {
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-text-muted);
   }
 
-  .sold-out,
   .buy-error {
     color: var(--color-text-muted);
+    margin-top: var(--space-2);
   }
 
   @media (max-width: 800px) {
     .detail {
       grid-template-columns: 1fr;
+      gap: var(--space-3);
+    }
+
+    .buy {
+      max-width: none;
     }
   }
 </style>

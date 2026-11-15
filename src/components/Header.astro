@@ -1,0 +1,307 @@
+---
+import { faBars, faXmark } from '@fortawesome/free-solid-svg-icons';
+import Icon from './Icon.astro';
+import SocialLinks from './SocialLinks.astro';
+import type { SocialLink } from '../lib/sanity';
+
+interface Props {
+  siteName: string;
+  socialLinks: SocialLink[];
+  /** Landing page: header floats transparently over the hero and turns
+      solid (with its bottom hairline) once the hero has scrolled away. */
+  overHero?: boolean;
+}
+
+const { siteName, socialLinks, overHero = false } = Astro.props;
+const { pathname } = Astro.url;
+
+// Section links are root-relative so they work from every page; on the
+// landing page itself the browser treats them as in-page jumps.
+const links = [
+  { href: '/#music', label: 'Music' },
+  { href: '/#watch', label: 'Watch', current: pathname.startsWith('/watch') },
+  { href: '/#live', label: 'Live' },
+  { href: '/#projects', label: 'Projects' },
+  { href: '/#shop', label: 'Shop', current: pathname.startsWith('/shop') },
+];
+---
+
+<header class="site-header" data-over-hero={overHero ? '' : undefined}>
+  <div class="bar">
+    <a href="/" class="brand">{siteName}</a>
+
+    <nav class="nav-desktop" aria-label="Main">
+      <ul>
+        {links.map((link) => (
+          <li>
+            <a href={link.href} aria-current={link.current ? 'page' : undefined}>{link.label}</a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+
+    <div class="social-desktop">
+      <SocialLinks links={socialLinks} artistName={siteName} />
+    </div>
+
+    <button type="button" class="menu-toggle" aria-haspopup="dialog" aria-controls="mobile-menu">
+      <Icon icon={faBars} />
+      <span class="visually-hidden">Open menu</span>
+    </button>
+  </div>
+</header>
+
+<dialog id="mobile-menu" class="mobile-menu" aria-label="Menu">
+  <div class="mobile-menu-inner">
+    <button type="button" class="menu-close" data-close-menu>
+      <Icon icon={faXmark} />
+      <span class="visually-hidden">Close menu</span>
+    </button>
+
+    <nav aria-label="Main">
+      <ul>
+        <li><a href="/" data-close-menu>Home</a></li>
+        {links.map((link) => (
+          <li>
+            <a href={link.href} aria-current={link.current ? 'page' : undefined} data-close-menu>{link.label}</a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+
+    <SocialLinks links={socialLinks} artistName={siteName} size="large" />
+  </div>
+</dialog>
+
+<script>
+  const header = document.querySelector<HTMLElement>('.site-header');
+  const hero = document.getElementById('hero');
+
+  // Solid bar + bottom hairline only once the hero is out of view.
+  if (header && hero && header.hasAttribute('data-over-hero')) {
+    const observer = new IntersectionObserver(
+      ([entry]) => header.classList.toggle('is-past-hero', !entry.isIntersecting),
+      { rootMargin: `-${header.offsetHeight}px 0px 0px 0px` }
+    );
+    observer.observe(hero);
+  }
+
+  const menu = document.getElementById('mobile-menu') as HTMLDialogElement | null;
+  const toggle = document.querySelector<HTMLButtonElement>('.menu-toggle');
+
+  toggle?.addEventListener('click', () => menu?.showModal());
+
+  menu?.querySelectorAll('[data-close-menu]').forEach((el) => {
+    // Closing before the link navigates releases the scroll lock, so the
+    // in-page jump to the section works.
+    el.addEventListener('click', () => menu.close());
+  });
+
+  // Closing on wide screens avoids a stranded open menu after a resize.
+  window.matchMedia('(min-width: 900px)').addEventListener('change', (e) => {
+    if (e.matches) menu?.close();
+  });
+</script>
+
+<style>
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--color-bg);
+    border-bottom: 1px solid var(--color-border);
+    transition:
+      background-color 0.3s ease,
+      border-color 0.3s ease;
+  }
+
+  /* On the landing page the header floats over the full-bleed hero. */
+  /* No border at all over the hero: a transparent border still lets the
+     gradient background repeat into it, which drew a dark line across the
+     photo. The hairline is a shadow that only appears past the hero. */
+  .site-header[data-over-hero] {
+    position: fixed;
+    left: 0;
+    right: 0;
+    border-bottom: 0;
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.55), transparent);
+    box-shadow: 0 1px 0 transparent;
+    transition:
+      background-color 0.3s ease,
+      box-shadow 0.3s ease;
+  }
+
+  .site-header[data-over-hero].is-past-hero {
+    background: var(--color-bg);
+    box-shadow: 0 1px 0 var(--color-border);
+  }
+
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    height: var(--header-height);
+    padding: 0 var(--space-2);
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--tap);
+    margin-right: auto;
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 1.6rem;
+    text-transform: uppercase;
+    text-decoration: none;
+    line-height: 1;
+  }
+
+  .nav-desktop,
+  .social-desktop {
+    display: none;
+  }
+
+  .nav-desktop ul {
+    list-style: none;
+    display: flex;
+    gap: var(--space-1);
+    margin: 0;
+    padding: 0;
+  }
+
+  .nav-desktop a {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--tap);
+    padding: 0 0.6rem;
+    font-weight: 700;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    text-decoration: none;
+  }
+
+  /* Underline grows from the centre on hover / for the current page. */
+  .nav-desktop a::after {
+    content: '';
+    position: absolute;
+    left: 0.6rem;
+    right: 0.6rem;
+    bottom: 0.6rem;
+    height: 2px;
+    background: currentColor;
+    transform: scaleX(0);
+    transition: transform 0.25s var(--ease-out);
+  }
+
+  .nav-desktop a:hover::after,
+  .nav-desktop a[aria-current='page']::after {
+    transform: scaleX(1);
+  }
+
+  .menu-toggle,
+  .menu-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--tap);
+    height: var(--tap);
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--color-text);
+    font-size: 1.5rem;
+    cursor: pointer;
+  }
+
+  @media (min-width: 900px) {
+    .bar {
+      padding: 0 var(--space-3);
+    }
+
+    .nav-desktop,
+    .social-desktop {
+      display: block;
+    }
+
+    .menu-toggle {
+      display: none;
+    }
+  }
+
+  /* ---------- Mobile menu ---------- */
+
+  .mobile-menu {
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    max-height: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: var(--color-bg);
+    color: var(--color-text);
+  }
+
+  .mobile-menu::backdrop {
+    background: var(--color-bg);
+  }
+
+  .mobile-menu-inner {
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-4);
+    padding: var(--space-5) var(--space-2);
+  }
+
+  .menu-close {
+    position: absolute;
+    top: calc((var(--header-height) - var(--tap)) / 2);
+    right: var(--space-2);
+    font-size: 1.75rem;
+  }
+
+  .mobile-menu ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    text-align: center;
+  }
+
+  .mobile-menu nav a {
+    display: block;
+    padding: 0.4rem var(--space-2);
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: clamp(2rem, 10vw, 3rem);
+    text-transform: uppercase;
+    text-decoration: none;
+    line-height: 1.15;
+  }
+
+  .mobile-menu nav a[aria-current='page'] {
+    text-decoration: underline;
+    text-decoration-thickness: 3px;
+    text-underline-offset: 6px;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .mobile-menu[open] {
+      animation: menu-in 0.35s var(--ease-out);
+    }
+
+    @keyframes menu-in {
+      from {
+        opacity: 0;
+        transform: translateY(-12px);
+      }
+    }
+  }
+</style>

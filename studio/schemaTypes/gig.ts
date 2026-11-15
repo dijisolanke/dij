@@ -30,6 +30,12 @@ export default defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
+      name: 'ticketUrl',
+      title: 'Ticket link',
+      type: 'url',
+      description: 'Shows a "Tickets" button on the listing. Ignored while the gig is marked sold out.',
+    }),
+    defineField({
       name: 'soldOut',
       title: 'Sold out',
       type: 'boolean',

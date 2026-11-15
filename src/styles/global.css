@@ -1,14 +1,18 @@
 :root {
-  --color-bg: #f7f6f2;
-  --color-bg-raised: #ffffff;
-  --color-text: #1d1d1f;
-  --color-text-muted: #6e6e73;
-  --color-border: #e5e3dd;
-  --color-accent: #1d1d1f;
+  color-scheme: dark;
 
-  --font-sans:
-    -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
-    "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --color-bg: #000000;
+  --color-surface: #111111;
+  --color-surface-raised: #1a1a1a;
+  --color-text: #ffffff;
+  /* #a3a3a3 on #000 is ~8.4:1 — passes WCAG AA for body text. */
+  --color-text-muted: #a3a3a3;
+  --color-border: #2a2a2a;
+  --color-border-strong: #ffffff;
+  --color-focus: #ffffff;
+
+  --font-sans: "Work Sans", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-display: "Work Sans", "Arial Black", Impact, sans-serif;
 
   --space-1: 0.5rem;
   --space-2: 1rem;
@@ -18,6 +22,10 @@
   --space-6: 6rem;
 
   --max-width: 1080px;
+  --header-height: 4rem;
+  /* Minimum touch target (WCAG 2.5.5). */
+  --tap: 44px;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 * {
@@ -26,6 +34,13 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  scroll-padding-top: var(--header-height);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
 }
 
 body {
@@ -34,9 +49,14 @@ body {
   color: var(--color-text);
   font-family: var(--font-sans);
   font-size: 1rem;
-  line-height: 1.5;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+/* Any open modal <dialog> (project overlay, mobile menu) locks page scroll. */
+html:has(dialog[open]) {
+  overflow: hidden;
 }
 
 img,
@@ -49,31 +69,32 @@ a {
   color: inherit;
 }
 
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 3px;
+}
+
 h1,
 h2,
 h3 {
-  font-weight: 600;
-  letter-spacing: -0.02em;
   margin: 0 0 var(--space-2);
-}
-
-h1 {
-  font-size: clamp(2rem, 5vw, 3.25rem);
-}
-
-h2 {
-  font-size: clamp(1.5rem, 3vw, 2rem);
+  line-height: 1.1;
 }
 
 p {
-  color: var(--color-text-muted);
   margin: 0 0 var(--space-2);
 }
 
 .container {
   max-width: var(--max-width);
   margin: 0 auto;
-  padding: 0 var(--space-3);
+  padding: 0 var(--space-2);
+}
+
+@media (min-width: 640px) {
+  .container {
+    padding: 0 var(--space-3);
+  }
 }
 
 .visually-hidden {
@@ -83,4 +104,116 @@ p {
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
+}
+
+.skip-link {
+  position: absolute;
+  left: var(--space-2);
+  top: -100px;
+  z-index: 1000;
+  padding: 0.75rem 1rem;
+  background: var(--color-text);
+  color: var(--color-bg);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.skip-link:focus {
+  top: var(--space-2);
+}
+
+/* ---------- Landing page sections ---------- */
+
+.section {
+  padding: var(--space-5) 0;
+}
+
+@media (min-width: 800px) {
+  .section {
+    padding: var(--space-6) 0;
+  }
+}
+
+/* Big uppercase heading flanked by hairlines, as in the template. */
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: clamp(2rem, 8vw, 3.4rem);
+  text-transform: uppercase;
+  letter-spacing: 0;
+  line-height: 1;
+  text-align: center;
+}
+
+.section-title::before,
+.section-title::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--color-border-strong);
+}
+
+.empty {
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5em;
+  min-height: var(--tap);
+  padding: 0.65rem 1.75rem;
+  border: 2px solid var(--color-text);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.button:hover,
+.button:focus-visible {
+  background: var(--color-text);
+  color: var(--color-bg);
+}
+
+.button[disabled],
+.button[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.button[disabled]:hover,
+.button[aria-disabled='true']:hover {
+  background: transparent;
+  color: var(--color-text);
+}
+
+/* Scroll-in animation. Only applied once JS has confirmed it can reveal
+   things again (html.js-reveal), so content never stays hidden without JS. */
+@media (prefers-reduced-motion: no-preference) {
+  .js-reveal [data-reveal-on-scroll] {
+    opacity: 0;
+    transform: translateY(32px);
+    transition:
+      opacity 0.8s var(--ease-out),
+      transform 0.8s var(--ease-out);
+  }
+
+  .js-reveal [data-reveal-on-scroll].is-visible {
+    opacity: 1;
+    transform: none;
+  }
 }

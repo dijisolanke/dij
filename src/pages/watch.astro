@@ -1,8 +1,11 @@
 ---
 export const prerender = false;
 
+import { faArrowLeft } from '@fortawesome/free-solid-svg-icons';
 import Layout from '../layouts/Layout.astro';
-import { getWatchEntries, urlFor, type WatchMedia } from '../lib/sanity';
+import Icon from '../components/Icon.astro';
+import VideoCard from '../components/VideoCard.astro';
+import { getWatchEntries, urlFor } from '../lib/sanity';
 
 Astro.response.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
 
@@ -14,159 +17,86 @@ try {
 } catch {
   loadError = true;
 }
-
-// Used whenever a provider has no thumbnail (Vimeo) or its thumbnails 404
-// (confirmed this happens: YouTube doesn't generate maxresdefault for every
-// upload). Replace this file any time — no code change needed.
-const FALLBACK_THUMBNAIL = '/video-thumbnail-fallback.svg';
-
-interface ResolvedEmbed {
-  embedUrl: string;
-  // First candidate is tried first; on error the next one is tried, and so
-  // on. Always ends with FALLBACK_THUMBNAIL so there's always a last resort.
-  thumbnailCandidates: string[];
-}
-
-function youtubeEmbed(url: string): ResolvedEmbed | null {
-  const watch = url.match(/[?&]v=([\w-]{11})/);
-  const short = url.match(/youtu\.be\/([\w-]{11})/);
-  const id = watch?.[1] || short?.[1];
-  if (!id) return null;
-  return {
-    embedUrl: `https://www.youtube.com/embed/${id}`,
-    thumbnailCandidates: [
-      `https://img.youtube.com/vi/${id}/maxresdefault.jpg`,
-      `https://img.youtube.com/vi/${id}/hqdefault.jpg`,
-      FALLBACK_THUMBNAIL,
-    ],
-  };
-}
-
-function vimeoEmbed(url: string): ResolvedEmbed | null {
-  const match = url.match(/vimeo\.com\/(\d+)/);
-  if (!match) return null;
-  return {
-    embedUrl: `https://player.vimeo.com/video/${match[1]}`,
-    thumbnailCandidates: [FALLBACK_THUMBNAIL],
-  };
-}
 ---
 
 <Layout title="Watch" description="Videos">
-  <main class="page">
-    <h1>Watch</h1>
+  <main id="main" class="container page">
+    <a href="/#watch" class="back-link">
+      <Icon icon={faArrowLeft} />
+      Back to home
+    </a>
+
+    <h1 class="section-title">Watch</h1>
 
     {loadError && <p class="empty">Couldn't load this page right now. Please check back shortly.</p>}
     {!loadError && entries.length === 0 && <p class="empty">Nothing here yet — check back soon.</p>}
 
     {!loadError && entries.length > 0 && (
       <div class="feed">
-        {entries.map((entry) => (
-          <article
-            class="entry"
-            data-reveal={entry.revealStyle === 'tap-to-reveal' ? 'true' : undefined}
-          >
-            <div class="entry-cover">
-              {entry.revealStyle === 'tap-to-reveal' && <span class="reveal-hint">Tap to reveal</span>}
-              <div class="entry-content">
+        {entries.map((entry) => {
+          const isHidden = entry.revealStyle === 'tap-to-reveal';
+          return (
+            <article class="entry" data-reveal-entry={isHidden ? '' : undefined} data-reveal-on-scroll>
+              {isHidden && (
+                <button type="button" class="reveal-button">
+                  Tap to reveal
+                  {entry.title && <span class="visually-hidden">: {entry.title}</span>}
+                </button>
+              )}
+              <div class="entry-content" inert={isHidden}>
                 {entry.title && <h2>{entry.title}</h2>}
-                {entry.body && <p>{entry.body}</p>}
+                {entry.body && <p class="entry-body">{entry.body}</p>}
                 {entry.media && entry.media.length > 0 && (
                   <div class="media">
-                    {entry.media.map((m: WatchMedia) => {
-                      if (m._type === 'mediaImage') {
-                        return <img src={urlFor(m).width(900).url()} alt="" loading="lazy" />;
-                      }
-                      if (m._type === 'videoUpload') {
-                        return (
-                          <figure class="video">
-                            <video src={m.asset.url} controls preload="none" />
-                            {m.title && <figcaption>{m.title}</figcaption>}
-                          </figure>
-                        );
-                      }
-                      if (m._type === 'videoLink') {
-                        const embed = youtubeEmbed(m.url) || vimeoEmbed(m.url);
-                        return (
-                          <figure class="video">
-                            {embed ? (
-                              <div class="embed-wrap" data-embed-src={embed.embedUrl}>
-                                <button
-                                  type="button"
-                                  class="play-facade"
-                                  aria-label={`Play ${m.title || entry.title || 'video'}`}
-                                >
-                                  <img
-                                    src={embed.thumbnailCandidates[0]}
-                                    data-thumb-candidates={embed.thumbnailCandidates.slice(1).join(',')}
-                                    alt=""
-                                    loading="lazy"
-                                  />
-                                  <svg class="play-icon" viewBox="0 0 24 24" aria-hidden="true">
-                                    <circle cx="12" cy="12" r="12" fill="rgba(255,255,255,0.9)" />
-                                    <path d="M9.5 7.5v9l8-4.5-8-4.5z" fill="#1d1d1f" />
-                                  </svg>
-                                </button>
-                              </div>
-                            ) : (
-                              <a href={m.url} target="_blank" rel="noopener noreferrer">
-                                {m.title || 'Watch video'}
-                              </a>
-                            )}
-                            {embed && m.title && <figcaption>{m.title}</figcaption>}
-                          </figure>
-                        );
-                      }
-                      return null;
-                    })}
+                    {entry.media.map((m) =>
+                      m._type === 'mediaImage' ? (
+                        <img
+                          src={urlFor(m).width(1200).auto('format').url()}
+                          srcset={[600, 1200, 1800].map((w) => `${urlFor(m).width(w).auto('format').url()} ${w}w`).join(', ')}
+                          sizes="(min-width: 1080px) 900px, 100vw"
+                          alt=""
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      ) : (
+                        // Unembeddable links render as a plain link inside VideoCard.
+                        <VideoCard video={m} fallbackTitle={entry.title} />
+                      )
+                    )}
                   </div>
                 )}
               </div>
-            </div>
-          </article>
-        ))}
+            </article>
+          );
+        })}
       </div>
     )}
+
+    <p class="back-bottom">
+      <a href="/" class="button">
+        <Icon icon={faArrowLeft} />
+        Back to home
+      </a>
+    </p>
   </main>
 </Layout>
 
 <script>
-  document.querySelectorAll<HTMLElement>('.entry[data-reveal="true"]').forEach((entry) => {
-    entry.addEventListener(
+  document.querySelectorAll<HTMLElement>('[data-reveal-entry]').forEach((entry) => {
+    const button = entry.querySelector<HTMLButtonElement>('.reveal-button');
+    const content = entry.querySelector<HTMLElement>('.entry-content');
+    button?.addEventListener(
       'click',
       () => {
         entry.classList.add('revealed');
-      },
-      { once: true }
-    );
-  });
-
-  document.querySelectorAll<HTMLImageElement>('.play-facade img').forEach((img) => {
-    img.addEventListener('error', function onError() {
-      const remaining = (img.dataset.thumbCandidates || '').split(',').filter(Boolean);
-      const next = remaining.shift();
-      img.dataset.thumbCandidates = remaining.join(',');
-      if (next) {
-        img.src = next;
-      } else {
-        img.removeEventListener('error', onError);
-      }
-    });
-  });
-
-  document.querySelectorAll<HTMLButtonElement>('.play-facade').forEach((button) => {
-    button.addEventListener(
-      'click',
-      () => {
-        const wrap = button.closest<HTMLElement>('.embed-wrap');
-        const src = wrap?.dataset.embedSrc;
-        if (!wrap || !src) return;
-
-        const iframe = document.createElement('iframe');
-        iframe.src = `${src}${src.includes('?') ? '&' : '?'}autoplay=1`;
-        iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
-        iframe.allowFullscreen = true;
-        wrap.replaceChildren(iframe);
+        content?.removeAttribute('inert');
+        button.remove();
+        // Move focus into the revealed content so keyboard users land on it.
+        const first = content?.querySelector<HTMLElement>('button, a, video, h2');
+        if (first) {
+          if (first.tagName === 'H2') first.tabIndex = -1;
+          first.focus({ preventScroll: true });
+        }
       },
       { once: true }
     );
@@ -175,144 +105,109 @@ function vimeoEmbed(url: string): ResolvedEmbed | null {
 
 <style>
   .page {
-    padding: var(--space-4) var(--space-3) var(--space-6);
+    padding-top: var(--space-3);
+    padding-bottom: var(--space-6);
+    max-width: 960px;
   }
 
-  .empty {
-    color: var(--color-text-muted);
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: var(--tap);
+    margin-bottom: var(--space-3);
+    font-weight: 700;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    text-decoration: none;
+  }
+
+  .back-link:hover {
+    text-decoration: underline;
+    text-underline-offset: 4px;
   }
 
   .feed {
     display: flex;
     flex-direction: column;
     gap: var(--space-5);
-    margin-top: var(--space-4);
   }
 
-  @media (min-width: 801px) {
-    .feed {
-      max-width: 85%;
-    }
+  .entry {
+    position: relative;
   }
 
   .entry-content h2 {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: clamp(1.5rem, 5vw, 2.25rem);
+    text-transform: uppercase;
     margin-bottom: var(--space-1);
+  }
+
+  .entry-body {
+    color: var(--color-text-muted);
+    max-width: 65ch;
   }
 
   .media {
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
+    gap: var(--space-4);
     margin-top: var(--space-2);
   }
 
-  .media img,
-  .media video {
+  .media > img {
     width: 100%;
-    border-radius: 4px;
+    height: auto;
   }
 
-  .video {
-    display: block;
-    width: 100%;
-    margin: 0;
-  }
+  /* ---------- Tap to reveal ---------- */
 
-  .embed-wrap {
-    position: relative;
-    display: block;
-    width: 100%;
-    height: 0;
-    padding-bottom: 56.25%;
-    border-radius: 4px;
-    overflow: hidden;
-    background: var(--color-border);
-  }
-
-  /* :global because this iframe is created at runtime by the click-to-play
-     script (see below), so Astro's compiler never sees it and can't attach
-     its usual scoping attribute to it for a normal scoped rule to match. */
-  .embed-wrap :global(iframe) {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    border: 0;
-  }
-
-  .play-facade {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    border: 0;
-    background: var(--color-border);
-    cursor: pointer;
-  }
-
-  .play-facade img {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  .play-icon {
-    position: relative;
-    width: 3.5rem;
-    height: 3.5rem;
-    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
-    transition: transform 0.15s ease;
-  }
-
-  .play-facade:hover .play-icon {
-    transform: scale(1.08);
-  }
-
-  .video figcaption {
-    margin-top: var(--space-1);
-    font-size: 0.85rem;
-    color: var(--color-text-muted);
-  }
-
-  .entry[data-reveal='true'] .entry-content {
-    filter: blur(16px);
+  [data-reveal-entry] .entry-content {
+    filter: blur(18px);
     user-select: none;
-    transition: filter 0.4s ease;
+    transition: filter 0.5s ease;
   }
 
-  .entry[data-reveal='true'] {
-    cursor: pointer;
-    position: relative;
+  [data-reveal-entry].revealed .entry-content {
+    filter: none;
+    user-select: auto;
   }
 
-  .entry[data-reveal='true'] .reveal-hint {
+  .reveal-button {
     position: absolute;
     inset: 0;
+    z-index: 2;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.85rem;
-    color: var(--color-text-muted);
-    z-index: 1;
-    pointer-events: none;
+    width: 100%;
+    border: 0;
+    background: rgba(0, 0, 0, 0.25);
+    color: var(--color-text);
+    font: inherit;
+    font-weight: 900;
+    font-size: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    cursor: pointer;
   }
 
-  .entry[data-reveal='true'].revealed .entry-content {
-    filter: none;
+  .reveal-button:focus-visible {
+    outline: 3px solid var(--color-focus);
+    outline-offset: -3px;
   }
 
-  .entry[data-reveal='true'].revealed {
-    cursor: default;
+  .back-bottom {
+    margin: var(--space-5) 0 0;
+    text-align: center;
   }
 
-  .entry[data-reveal='true'].revealed .reveal-hint {
-    display: none;
+  @media (prefers-reduced-motion: reduce) {
+    [data-reveal-entry] .entry-content {
+      transition: none;
+    }
   }
 </style>
