@@ -1,6 +1,7 @@
 ---
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
+import MotionBlurCursor from '../components/MotionBlurCursor.astro';
 import { getSiteSettings, type SiteSettings } from '../lib/sanity';
 import '../styles/global.css';
 
@@ -49,6 +50,7 @@ const socialLinks = settings?.socialLinks || [];
     <Header siteName={displayName} socialLinks={socialLinks} overHero={overHero} />
     <slot />
     <Footer siteName={siteName} />
+    <MotionBlurCursor />
 
     <script>
       // Fade/slide sections in as they scroll into view (see global.css).

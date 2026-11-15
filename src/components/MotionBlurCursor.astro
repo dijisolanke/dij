@@ -1,0 +1,190 @@
+---
+/**
+ * "Motion blur" custom cursor (inspired by cursor #6 of Fuzionix's Curzr).
+ * A dot that stretches and blurs along its direction of travel, settling crisp
+ * when the mouse stops.
+ *
+ * Lightweight by design: no dependencies, nothing runs on touch devices or with
+ * prefers-reduced-motion, and the rAF loop sleeps while the mouse is idle.
+ * The native cursor is only hidden once this script is running, so a failed or
+ * slow script leaves the normal cursor in place.
+ */
+---
+
+<div class="mb-cursor" aria-hidden="true">
+  <svg class="mb-dot" width="20" height="20" viewBox="0 0 20 20" focusable="false">
+    <defs>
+      <filter id="mb-cursor-blur" x="-150%" y="-50%" width="400%" height="200%">
+        <feGaussianBlur stdDeviation="0 0"></feGaussianBlur>
+      </filter>
+    </defs>
+    <circle cx="10" cy="10" r="6" filter="url(#mb-cursor-blur)"></circle>
+  </svg>
+</div>
+
+<style>
+  .mb-cursor {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    pointer-events: none;
+    z-index: 9999;
+    mix-blend-mode: difference;
+    will-change: transform;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+
+  .mb-dot {
+    display: block;
+    overflow: visible;
+    fill: var(--color-text);
+    transition: transform 0.25s var(--ease-out);
+  }
+
+  .mb-cursor.is-visible {
+    opacity: 1;
+  }
+
+  /* Grow over interactive elements. */
+  .mb-cursor.is-hover .mb-dot {
+    transform: scale(2);
+  }
+
+  /* Native text caret takes over in text fields. */
+  .mb-cursor.is-text {
+    opacity: 0;
+  }
+
+  :global(html.has-custom-cursor) .mb-cursor {
+    display: block;
+  }
+
+  /* Hide the native cursor only while the custom one is active and no modal
+     <dialog> is open (dialogs render in the top layer, above this element). */
+  :global(html.has-custom-cursor:not(:has(dialog[open]))),
+  :global(html.has-custom-cursor:not(:has(dialog[open])) *) {
+    cursor: none !important;
+  }
+
+  :global(html.has-custom-cursor:has(dialog[open])) .mb-cursor {
+    display: none;
+  }
+</style>
+
+<script>
+  const fine = window.matchMedia('(hover: hover) and (pointer: fine)');
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const el = document.querySelector<HTMLElement>('.mb-cursor');
+  const blurEl = el?.querySelector('feGaussianBlur');
+
+  if (el && blurEl && fine.matches && !reduced.matches) {
+    const root = document.documentElement;
+    const HOVER = 'a, button, [role="button"], label, summary, select, input[type="checkbox"], input[type="radio"], input[type="submit"], input[type="button"]';
+    const TEXT = 'input, textarea, [contenteditable="true"]';
+    const EASE = 0.35;
+
+    let tx = 0, ty = 0; // pointer target
+    let cx = 0, cy = 0; // rendered position
+    let angle = 0;
+    let lastBlur = -1;
+    let running = false;
+    let started = false;
+
+    const render = (stretch: number, blur: number) => {
+      const sx = 1 + stretch * 1.2;
+      const sy = 1 - stretch * 0.3;
+      el.style.transform = `translate3d(${cx}px, ${cy}px, 0) rotate(${angle}deg) scale(${sx}, ${sy})`;
+      if (blur !== lastBlur) {
+        blurEl.setAttribute('stdDeviation', `${blur} 0`);
+        lastBlur = blur;
+      }
+    };
+
+    const tick = () => {
+      const dx = tx - cx;
+      const dy = ty - cy;
+      const dist = Math.hypot(dx, dy);
+
+      if (dist < 0.3) {
+        cx = tx;
+        cy = ty;
+        render(0, 0);
+        running = false;
+        return;
+      }
+
+      cx += dx * EASE;
+      cy += dy * EASE;
+      if (dist > 1) angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+      const stretch = Math.min(dist / 60, 1);
+      const blur = Math.round(Math.min(dist / 8, 4) * 2) / 2; // 0.5 steps, max 4
+      render(stretch, blur);
+      requestAnimationFrame(tick);
+    };
+
+    const wake = () => {
+      if (!running) {
+        running = true;
+        requestAnimationFrame(tick);
+      }
+    };
+
+    document.addEventListener(
+      'pointermove',
+      (e) => {
+        if (e.pointerType !== 'mouse') return;
+        tx = e.clientX;
+        ty = e.clientY;
+        if (!started) {
+          // Snap to the first position instead of flying in from the corner.
+          started = true;
+          cx = tx;
+          cy = ty;
+          root.classList.add('has-custom-cursor');
+        }
+        if ((e.target as Element | null)?.closest?.('iframe')) return;
+        el.classList.add('is-visible');
+        wake();
+      },
+      { passive: true }
+    );
+
+    document.addEventListener(
+      'pointerover',
+      (e) => {
+        const target = e.target as Element | null;
+        // Embeds (SoundCloud, YouTube, Vimeo) are separate documents: we get no
+        // pointermove while over them, so hide the dot and let the native cursor
+        // show. pointermove brings it back on return.
+        if (target?.closest('iframe')) {
+          el.classList.remove('is-visible');
+          return;
+        }
+        el.classList.toggle('is-text', !!target?.closest(TEXT) && !target.closest(HOVER));
+        el.classList.toggle('is-hover', !!target?.closest(HOVER));
+      },
+      { passive: true }
+    );
+
+    // Hide when leaving the window (relatedTarget null) or moving into an embed.
+    document.addEventListener('mouseout', (e) => {
+      const to = e.relatedTarget as Element | null;
+      if (!to || to.tagName === 'IFRAME') el.classList.remove('is-visible');
+    });
+
+    // Switch off cleanly if the user changes device mode or motion settings.
+    const disable = () => {
+      if (!fine.matches || reduced.matches) {
+        root.classList.remove('has-custom-cursor');
+        el.classList.remove('is-visible');
+      }
+    };
+    fine.addEventListener('change', disable);
+    reduced.addEventListener('change', disable);
+  }
+</script>
