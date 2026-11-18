@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { PUBLIC_SITE_URL } from 'astro:env/server';
 import { stripe } from '../../lib/stripe';
 import { getShopItemBySlug, getSiteSettings, urlFor } from '../../lib/sanity';
 
@@ -28,7 +29,7 @@ export const POST: APIRoute = async ({ request }) => {
     return new Response(JSON.stringify({ error: 'Item is sold out' }), { status: 400 });
   }
 
-  const siteUrl = import.meta.env.PUBLIC_SITE_URL || new URL(request.url).origin;
+  const siteUrl = PUBLIC_SITE_URL || new URL(request.url).origin;
 
   // Digital items (tickets) today; physical items will need
   // shipping_address_collection + shipping_options added here later.

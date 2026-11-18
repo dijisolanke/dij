@@ -1,8 +1,9 @@
 import { createClient } from '@sanity/client';
-import imageUrlBuilder from '@sanity/image-url';
+import { createImageUrlBuilder } from '@sanity/image-url';
+import { PUBLIC_SANITY_PROJECT_ID, PUBLIC_SANITY_DATASET } from 'astro:env/client';
 
-const projectId = import.meta.env.PUBLIC_SANITY_PROJECT_ID;
-const dataset = import.meta.env.PUBLIC_SANITY_DATASET || 'production';
+const projectId = PUBLIC_SANITY_PROJECT_ID;
+const dataset = PUBLIC_SANITY_DATASET;
 
 export const sanity = createClient({
   projectId,
@@ -11,7 +12,7 @@ export const sanity = createClient({
   useCdn: true,
 });
 
-const builder = imageUrlBuilder(sanity);
+const builder = createImageUrlBuilder(sanity);
 
 export interface SanityImage {
   _type: string;

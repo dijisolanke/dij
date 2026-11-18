@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
-import { stripe } from '../../lib/stripe';
+import { STRIPE_WEBHOOK_SECRET } from 'astro:env/server';
+import { stripe, cryptoProvider } from '../../lib/stripe';
 
 export const prerender = false;
 
@@ -13,10 +14,13 @@ export const POST: APIRoute = async ({ request }) => {
 
   let event;
   try {
-    event = stripe.webhooks.constructEvent(
+    // Async variant + SubtleCrypto: Workers has no synchronous Node crypto.
+    event = await stripe.webhooks.constructEventAsync(
       body,
       signature,
-      import.meta.env.STRIPE_WEBHOOK_SECRET
+      STRIPE_WEBHOOK_SECRET,
+      undefined,
+      cryptoProvider
     );
   } catch (err) {
     return new Response(`Webhook signature verification failed`, { status: 400 });
