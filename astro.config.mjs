@@ -23,9 +23,15 @@ export default defineConfig({
 
       STRIPE_SECRET_KEY: envField.string({ context: 'server', access: 'secret' }),
       STRIPE_WEBHOOK_SECRET: envField.string({ context: 'server', access: 'secret' }),
-      // Used from Step 3 onwards (stock updates, shipping), so optional for now.
-      SANITY_WRITE_TOKEN: envField.string({ context: 'server', access: 'secret', optional: true }),
+      // Editor-role token: checkout reads fresh data and writes stock + orders.
+      SANITY_WRITE_TOKEN: envField.string({ context: 'server', access: 'secret' }),
+      // Optional: comma-separated shr_ IDs. Empty = shipping built into prices.
       STRIPE_SHIPPING_RATE_IDS: envField.string({ context: 'server', access: 'secret', optional: true }),
+
+      // Cloudflare Turnstile (bot check on Buy). For local dev use Cloudflare's
+      // test keys (see .env.example); real keys only work on configured domains.
+      PUBLIC_TURNSTILE_SITE_KEY: envField.string({ context: 'client', access: 'public' }),
+      TURNSTILE_SECRET_KEY: envField.string({ context: 'server', access: 'secret' }),
     },
   },
 });

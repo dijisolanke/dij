@@ -26,6 +26,7 @@ pnpm-debug.log*
 
 # plans
 docs/
+.claude/
 
 ilekun.md
 # cloudflare

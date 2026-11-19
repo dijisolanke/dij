@@ -35,8 +35,24 @@ export default defineType({
       name: 'currency',
       title: 'Currency',
       type: 'string',
-      initialValue: 'usd',
-      options: {list: ['usd', 'gbp', 'eur']},
+      initialValue: 'gbp',
+      options: {list: ['gbp', 'usd', 'eur']},
+    }),
+    defineField({
+      name: 'stock',
+      title: 'Stock',
+      type: 'number',
+      description:
+        'Units available. Leave empty for unlimited. Goes down automatically when someone starts checkout, and comes back if they abandon it (after 30 min).',
+      validation: (Rule) => Rule.integer().min(0),
+    }),
+    defineField({
+      name: 'maxPerOrder',
+      title: 'Max per order',
+      type: 'number',
+      initialValue: 4,
+      description: 'Most units one customer can buy in a single checkout.',
+      validation: (Rule) => Rule.integer().min(1).max(20),
     }),
     defineField({
       name: 'type',

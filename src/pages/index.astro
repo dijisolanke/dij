@@ -14,6 +14,7 @@ import {
   getSiteSettings,
   getUpcomingGigs,
   getWatchEntries,
+  isSoldOut,
   urlFor,
   type SiteSettings,
 } from '../lib/sanity';
@@ -234,7 +235,7 @@ const description = about?.bio?.split(/\n\s*\n/)[0] || `${artistName} — music,
                     />
                   </div>
                   <span class="shop-title">{item.title}</span>
-                  <span class="shop-price">{item.soldOut ? 'Sold out' : formatPrice(item.price, item.currency)}</span>
+                  <span class="shop-price">{isSoldOut(item) ? 'Sold out' : formatPrice(item.price, item.currency)}</span>
                 </a>
               </li>
             ))}

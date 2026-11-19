@@ -5,7 +5,8 @@ import { faArrowLeft } from '@fortawesome/free-solid-svg-icons';
 import Layout from '../../layouts/Layout.astro';
 import Gallery from '../../components/Gallery.astro';
 import Icon from '../../components/Icon.astro';
-import { getShopItemBySlug, getSiteSettings, type SiteSettings } from '../../lib/sanity';
+import { getShopItemBySlug, getSiteSettings, isSoldOut, type SiteSettings } from '../../lib/sanity';
+import { PUBLIC_TURNSTILE_SITE_KEY } from 'astro:env/client';
 
 const { slug } = Astro.params;
 
@@ -25,6 +26,7 @@ if (!loadError && !item) {
 
 // TODO(stripe launch): see docs/stripe-launch-checklist.md before turning the shop on.
 const shopEnabled = settings?.shopEnabled ?? false;
+const buyable = !!item && shopEnabled && !isSoldOut(item);
 ---
 
 <Layout title={item ? item.title : 'Shop'} description={item?.description} settings={settings}>
@@ -45,18 +47,25 @@ const shopEnabled = settings?.shopEnabled ?? false;
           <p class="price">
             {new Intl.NumberFormat(undefined, {
               style: 'currency',
-              currency: item.currency || 'USD',
+              currency: item.currency || 'GBP',
             }).format(item.price)}
           </p>
           {item.description && <p class="description">{item.description}</p>}
 
           {!shopEnabled ? (
             <p class="status">Coming soon</p>
-          ) : item.soldOut ? (
+          ) : isSoldOut(item) ? (
             <p class="status">Sold out</p>
           ) : (
-            <button id="buy-button" class="button buy" data-slug={item.slug.current}>Buy</button>
+            <button
+              id="buy-button"
+              class="button buy"
+              data-slug={item.slug.current}
+              data-sitekey={PUBLIC_TURNSTILE_SITE_KEY}
+            >Buy</button>
           )}
+          {/* Bot check: invisible unless Cloudflare needs the visitor to tick a box. */}
+          {buyable && <div id="turnstile" class="turnstile"></div>}
           <p id="buy-error" class="buy-error" role="alert" hidden>Something went wrong — please try again.</p>
         </div>
       </div>
@@ -64,30 +73,95 @@ const shopEnabled = settings?.shopEnabled ?? false;
   </main>
 </Layout>
 
+{buyable && (
+  <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
+)}
+
 <script>
+  interface Turnstile {
+    render(el: HTMLElement, opts: Record<string, unknown>): string;
+    execute(el: HTMLElement): void;
+    reset(widgetId: string): void;
+  }
+  const getTurnstile = () => (window as unknown as { turnstile?: Turnstile }).turnstile;
+
   const button = document.getElementById('buy-button');
   const errorEl = document.getElementById('buy-error');
+  const container = document.getElementById('turnstile');
+
+  function waitForTurnstile(timeoutMs = 10_000): Promise<Turnstile> {
+    return new Promise((resolve, reject) => {
+      const started = Date.now();
+      const tick = () => {
+        const ts = getTurnstile();
+        if (ts) return resolve(ts);
+        if (Date.now() - started > timeoutMs) return reject(new Error('Turnstile failed to load'));
+        setTimeout(tick, 100);
+      };
+      tick();
+    });
+  }
+
+  // Tokens are single-use, so each Buy click runs a fresh (usually invisible) check.
+  let widgetId: string | undefined;
+  let pending: { resolve: (t: string) => void; reject: (e: Error) => void } | null = null;
+
+  async function getTurnstileToken(sitekey: string): Promise<string> {
+    const ts = await waitForTurnstile();
+    return new Promise((resolve, reject) => {
+      pending = { resolve, reject };
+      if (!widgetId) {
+        widgetId = ts.render(container!, {
+          sitekey,
+          action: 'checkout',
+          appearance: 'interaction-only',
+          execution: 'execute',
+          callback: (token: string) => pending?.resolve(token),
+          'error-callback': () => pending?.reject(new Error('Turnstile error')),
+          'expired-callback': () => pending?.reject(new Error('Turnstile expired')),
+        });
+      } else {
+        ts.reset(widgetId);
+      }
+      ts.execute(container!);
+    });
+  }
+
+  function resetButton() {
+    if (!button) return;
+    button.removeAttribute('disabled');
+    button.removeAttribute('aria-busy');
+    button.textContent = 'Buy';
+  }
 
   button?.addEventListener('click', async () => {
     const slug = button.getAttribute('data-slug');
+    const sitekey = button.getAttribute('data-sitekey') ?? '';
     button.setAttribute('disabled', 'true');
     button.setAttribute('aria-busy', 'true');
-    button.textContent = 'Redirecting…';
+    button.textContent = 'Checking…';
     errorEl?.setAttribute('hidden', 'true');
 
     try {
+      const turnstileToken = await getTurnstileToken(sitekey);
+      button.textContent = 'Redirecting…';
       const res = await fetch('/api/create-checkout-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug }),
+        // Quantity picker comes with the shop UI pass; fixed at 1 until then.
+        body: JSON.stringify({ slug, qty: 1, turnstileToken }),
       });
       const data = await res.json();
+      if (res.status === 409) {
+        // Someone else got the last one between page load and click.
+        button.textContent = 'Sold out';
+        button.removeAttribute('aria-busy');
+        return;
+      }
       if (!res.ok || !data.url) throw new Error(data.error || 'Checkout failed');
       window.location.href = data.url;
     } catch {
-      button.removeAttribute('disabled');
-      button.removeAttribute('aria-busy');
-      button.textContent = 'Buy';
+      resetButton();
       errorEl?.removeAttribute('hidden');
     }
   });
@@ -151,6 +225,14 @@ const shopEnabled = settings?.shopEnabled ?? false;
     text-transform: uppercase;
     letter-spacing: 0.1em;
     color: var(--color-text-muted);
+  }
+
+  .turnstile {
+    margin-top: var(--space-2);
+  }
+
+  .turnstile:empty {
+    display: none;
   }
 
   .buy-error {

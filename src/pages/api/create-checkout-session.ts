@@ -1,61 +1,110 @@
 import type { APIRoute } from 'astro';
 import { PUBLIC_SITE_URL } from 'astro:env/server';
-import { stripe } from '../../lib/stripe';
-import { getShopItemBySlug, getSiteSettings, urlFor } from '../../lib/sanity';
+import { createCheckoutSession } from '../../lib/stripe/checkout';
+import {
+  SoldOutError,
+  attachSession,
+  cancelOrder,
+  getCheckoutItem,
+  getShopEnabled,
+  reserveAndCreateOrder,
+} from '../../lib/orders';
+import { verifyTurnstile } from '../../lib/turnstile';
 
 export const prerender = false;
 
+const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const MAX_BODY_BYTES = 1024;
+const DEFAULT_MAX_PER_ORDER = 4;
+
+const json = (body: unknown, status: number) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+  });
+
+/**
+ * Only our own pages may call this. Browsers always send Origin on POST, and
+ * requiring JSON forces a CORS preflight for cross-site callers, which we
+ * don't answer — so other sites can't trigger checkouts from a visitor's browser.
+ */
+function isSameOrigin(request: Request): boolean {
+  const origin = request.headers.get('origin');
+  if (!origin) return false;
+  const allowed = new Set([new URL(request.url).origin]);
+  if (PUBLIC_SITE_URL) allowed.add(new URL(PUBLIC_SITE_URL).origin);
+  return allowed.has(origin);
+}
+
 export const POST: APIRoute = async ({ request }) => {
-  const { slug } = await request.json();
-
-  if (!slug || typeof slug !== 'string') {
-    return new Response(JSON.stringify({ error: 'Missing slug' }), { status: 400 });
+  if (!isSameOrigin(request)) return json({ error: 'Forbidden' }, 403);
+  if (!request.headers.get('content-type')?.startsWith('application/json')) {
+    return json({ error: 'Bad request' }, 415);
   }
 
-  // Server-side check so checkout stays closed while the shop is switched
-  // off in Sanity, even if someone calls this endpoint directly.
-  const settings = await getSiteSettings();
-  if (!settings.shopEnabled) {
-    return new Response(JSON.stringify({ error: 'Shop is not open yet' }), { status: 403 });
+  // --- Parse + validate input (never trust the client for anything but slug + qty) ---
+  const raw = await request.text();
+  if (raw.length > MAX_BODY_BYTES) return json({ error: 'Bad request' }, 413);
+
+  let body: { slug?: unknown; qty?: unknown; turnstileToken?: unknown };
+  try {
+    body = JSON.parse(raw);
+  } catch {
+    return json({ error: 'Bad request' }, 400);
   }
 
-  const item = await getShopItemBySlug(slug);
-
-  if (!item) {
-    return new Response(JSON.stringify({ error: 'Item not found' }), { status: 404 });
+  const { slug } = body;
+  const qty = body.qty === undefined ? 1 : body.qty;
+  if (typeof slug !== 'string' || slug.length > 96 || !SLUG_RE.test(slug)) {
+    return json({ error: 'Bad request' }, 400);
+  }
+  if (typeof qty !== 'number' || !Number.isInteger(qty) || qty < 1) {
+    return json({ error: 'Invalid quantity' }, 400);
   }
 
-  if (item.soldOut) {
-    return new Response(JSON.stringify({ error: 'Item is sold out' }), { status: 400 });
+  // Bot check before touching Sanity/Stripe, so scripts can't tie up stock.
+  if (!(await verifyTurnstile(body.turnstileToken, request.headers.get('cf-connecting-ip')))) {
+    return json({ error: 'Verification failed, please try again' }, 403);
   }
 
-  const siteUrl = PUBLIC_SITE_URL || new URL(request.url).origin;
+  try {
+    // Fresh (non-CDN) reads: checkout must never act on stale settings/prices/stock.
+    if (!(await getShopEnabled())) return json({ error: 'Shop is not open yet' }, 403);
 
-  // Digital items (tickets) today; physical items will need
-  // shipping_address_collection + shipping_options added here later.
-  const session = await stripe.checkout.sessions.create({
-    mode: 'payment',
-    line_items: [
-      {
-        quantity: 1,
-        price_data: {
-          currency: item.currency || 'usd',
-          unit_amount: Math.round(item.price * 100),
-          product_data: {
-            name: item.title,
-            description: item.description,
-            images: item.images.slice(0, 1).map((img) => urlFor(img).width(800).height(800).url()),
-          },
-        },
-      },
-    ],
-    success_url: `${siteUrl}/shop/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${siteUrl}/shop/${item.slug.current}`,
-    metadata: { itemSlug: item.slug.current },
-  });
+    const item = await getCheckoutItem(slug);
+    if (!item) return json({ error: 'Item not found' }, 404);
+    if (qty > (item.maxPerOrder ?? DEFAULT_MAX_PER_ORDER)) {
+      return json({ error: 'Invalid quantity' }, 400);
+    }
 
-  return new Response(JSON.stringify({ url: session.url }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
+    // --- Reserve stock + create pending order (atomic) ---
+    const orderId = crypto.randomUUID();
+    let reserved;
+    try {
+      reserved = await reserveAndCreateOrder(slug, orderId, qty);
+    } catch (err) {
+      if (err instanceof SoldOutError) return json({ error: 'Sold out' }, 409);
+      throw err;
+    }
+
+    // --- Create the Stripe Checkout Session; give the stock back if that fails ---
+    const siteUrl = PUBLIC_SITE_URL || new URL(request.url).origin;
+    let session;
+    try {
+      session = await createCheckoutSession({ item: reserved, qty, orderId, siteUrl });
+    } catch (err) {
+      await cancelOrder(orderId).catch((e) => console.error('cancelOrder failed', orderId, e));
+      throw err;
+    }
+
+    // Convenience link for the Studio/reconciliation; the webhook relies on metadata, not this.
+    await attachSession(orderId, session.id).catch((e) =>
+      console.error('attachSession failed', orderId, e),
+    );
+
+    return json({ url: session.url }, 200);
+  } catch (err) {
+    console.error('create-checkout-session failed', err);
+    return json({ error: 'Checkout is unavailable right now' }, 500);
+  }
 };

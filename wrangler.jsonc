@@ -10,5 +10,15 @@
 	},
 	"observability": {
 		"enabled": true
+	},
+	// Two Workers from one repo (like Vercel's per-branch deployments):
+	//   dij      ← main branch: live Stripe keys, production dataset, real domain
+	//   dij-dev  ← dev branch:  test Stripe keys, development dataset, workers.dev URL
+	// Each Worker has its own variables/secrets in the Cloudflare dashboard.
+	// The dev Worker builds with `npm run build:dev` (sets CLOUDFLARE_ENV=dev).
+	"env": {
+		"dev": {
+			"name": "dij-dev"
+		}
 	}
 }

@@ -81,7 +81,14 @@ export interface ShopItem {
   type: 'digital-ticket' | 'physical';
   images: SanityImage[];
   soldOut?: boolean;
+  /** Units left. Undefined/null = unlimited. */
+  stock?: number | null;
+  maxPerOrder?: number;
 }
+
+/** Manual "Sold out" switch, or tracked stock has run out. */
+export const isSoldOut = (item: Pick<ShopItem, 'soldOut' | 'stock'>) =>
+  item.soldOut === true || (typeof item.stock === 'number' && item.stock <= 0);
 
 export type WatchMedia =
   | (SanityImage & { _type: 'mediaImage' })
