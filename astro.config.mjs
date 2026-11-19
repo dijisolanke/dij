@@ -15,7 +15,10 @@ export default defineConfig({
   // Typed env. Secrets are server-only and never bundled; locally they come
   // from .env, in production from Cloudflare (Settings → Variables and Secrets).
   env: {
-    validateSecrets: true,
+    // Secrets are runtime-only on Cloudflare (not available to the build), so
+    // they're validated when the server first uses them, not at build time.
+    // A missing secret then fails loudly at runtime (500 + log), never silently.
+    validateSecrets: false,
     schema: {
       PUBLIC_SANITY_PROJECT_ID: envField.string({ context: 'client', access: 'public' }),
       PUBLIC_SANITY_DATASET: envField.string({ context: 'client', access: 'public', default: 'production' }),
