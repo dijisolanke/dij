@@ -14,6 +14,9 @@
 		"directory": "./dist",
 		"binding": "ASSETS"
 	},
+	// Don't let deploys wipe plain-text variables added in the Cloudflare dashboard
+	// (secrets are always kept; this protects "Text" ones too).
+	"keep_vars": true,
 	"observability": {
 		"enabled": true
 	},
