@@ -35,6 +35,10 @@ export default defineConfig({
       // test keys (see .env.example); real keys only work on configured domains.
       PUBLIC_TURNSTILE_SITE_KEY: envField.string({ context: 'client', access: 'public' }),
       TURNSTILE_SECRET_KEY: envField.string({ context: 'server', access: 'secret' }),
+
+      // Protects the scheduled stale-reservation cleanup (/api/cron/release-stale).
+      // Optional so a missing value only disables cleanup, never the shop.
+      CRON_SECRET: envField.string({ context: 'server', access: 'secret', optional: true }),
     },
   },
 });

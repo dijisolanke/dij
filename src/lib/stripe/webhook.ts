@@ -6,7 +6,7 @@ import {
   markFailed,
   markPaid,
   markProcessing,
-  recordExternalOrder,
+  recordPaidOrder,
   type PaymentDetails,
 } from '../orders';
 
@@ -21,7 +21,7 @@ export function verifyEvent(rawBody: string, signature: string): Promise<Stripe.
   );
 }
 
-function paymentDetails(session: Stripe.Checkout.Session): PaymentDetails {
+export function paymentDetails(session: Stripe.Checkout.Session): PaymentDetails {
   const shipping = session.collected_information?.shipping_details;
   return {
     stripeSessionId: session.id,
@@ -37,13 +37,22 @@ function paymentDetails(session: Stripe.Checkout.Session): PaymentDetails {
   };
 }
 
-async function handleCompleted(session: Stripe.Checkout.Session) {
+/** Our checkout puts these on every session; used to recreate an order if it's missing. */
+function fallbackFrom(session: Stripe.Checkout.Session) {
+  const qty = Number(session.metadata?.qty);
+  return { itemId: session.metadata?.itemId, qty: Number.isInteger(qty) && qty > 0 ? qty : 1 };
+}
+
+export const isSettled = (session: Stripe.Checkout.Session) =>
+  session.payment_status === 'paid' || session.payment_status === 'no_payment_required';
+
+export async function handleCompleted(session: Stripe.Checkout.Session) {
   const details = paymentDetails(session);
   const orderId = session.metadata?.orderId;
-  const settled = session.payment_status === 'paid' || session.payment_status === 'no_payment_required';
+  const settled = isSettled(session);
 
   if (orderId) {
-    if (settled) await markPaid(orderId, details);
+    if (settled) await markPaid(orderId, details, fallbackFrom(session));
     else await markProcessing(orderId, details); // delayed method; wait for async_payment_*
     return;
   }
@@ -58,7 +67,7 @@ async function handleCompleted(session: Stripe.Checkout.Session) {
   if (!settled) return; // recorded once async_payment_succeeded arrives
   const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { limit: 1 });
   const qty = lineItems.data[0]?.quantity ?? 1;
-  await recordExternalOrder(session.id, itemId, qty, details);
+  await recordPaidOrder(session.id, itemId, qty, details);
 }
 
 /**
@@ -74,20 +83,20 @@ export async function handleEvent(event: Stripe.Event): Promise<void> {
 
     case 'checkout.session.async_payment_succeeded': {
       const session = event.data.object;
-      if (session.metadata?.orderId) await markPaid(session.metadata.orderId, paymentDetails(session));
+      if (session.metadata?.orderId) await markPaid(session.metadata.orderId, paymentDetails(session), fallbackFrom(session));
       else await handleCompleted(session);
       break;
     }
 
     case 'checkout.session.async_payment_failed': {
-      const orderId = event.data.object.metadata?.orderId;
-      if (orderId) await markFailed(orderId);
+      const session = event.data.object;
+      if (session.metadata?.orderId) await markFailed(session.metadata.orderId, session.id);
       break;
     }
 
     case 'checkout.session.expired': {
-      const orderId = event.data.object.metadata?.orderId;
-      if (orderId) await markExpired(orderId);
+      const session = event.data.object;
+      if (session.metadata?.orderId) await markExpired(session.metadata.orderId, session.id);
       break;
     }
 

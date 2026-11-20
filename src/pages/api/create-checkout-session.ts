@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { PUBLIC_SITE_URL } from 'astro:env/server';
 import { createCheckoutSession } from '../../lib/stripe/checkout';
 import {
+  BusyError,
   SoldOutError,
   attachSession,
   cancelOrder,
@@ -79,9 +80,8 @@ export const POST: APIRoute = async ({ request }) => {
 
     // --- Reserve stock + create pending order (atomic) ---
     const orderId = crypto.randomUUID();
-    let reserved;
     try {
-      reserved = await reserveAndCreateOrder(slug, orderId, qty);
+      await reserveAndCreateOrder(item, orderId, qty);
     } catch (err) {
       if (err instanceof SoldOutError) return json({ error: 'Sold out' }, 409);
       throw err;
@@ -91,7 +91,7 @@ export const POST: APIRoute = async ({ request }) => {
     const siteUrl = PUBLIC_SITE_URL || new URL(request.url).origin;
     let session;
     try {
-      session = await createCheckoutSession({ item: reserved, qty, orderId, siteUrl });
+      session = await createCheckoutSession({ item, qty, orderId, siteUrl });
     } catch (err) {
       await cancelOrder(orderId).catch((e) => console.error('cancelOrder failed', orderId, e));
       throw err;
@@ -104,6 +104,10 @@ export const POST: APIRoute = async ({ request }) => {
 
     return json({ url: session.url }, 200);
   } catch (err) {
+    if (err instanceof BusyError) {
+      // Burst of buyers: Sanity is rate-limiting writes. Nothing was reserved.
+      return json({ error: 'High demand right now, please try again in a moment' }, 503);
+    }
     console.error('create-checkout-session failed', err);
     return json({ error: 'Checkout is unavailable right now' }, 500);
   }

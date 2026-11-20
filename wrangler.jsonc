@@ -3,7 +3,13 @@
 	"compatibility_date": "2026-11-10",
 	"compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
 	"name": "dij",
-	"main": "@astrojs/cloudflare/entrypoints/server",
+	// Custom entry: Astro for web requests + `scheduled` for the cleanup cron.
+	"main": "./src/worker.ts",
+	// Every 15 min: release stock held by orders stuck in "pending" > 2h
+	// (checks Stripe first, so paid orders are recorded, never released).
+	"triggers": {
+		"crons": ["*/15 * * * *"]
+	},
 	"assets": {
 		"directory": "./dist",
 		"binding": "ASSETS"

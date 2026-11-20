@@ -31,6 +31,19 @@ export default defineType({
       description:
         'True if Stripe charged a different item amount than the site expected. Investigate and refund in Stripe if needed.',
     }),
+    defineField({
+      name: 'paidAfterRelease',
+      title: '⚠️ Paid after release',
+      type: 'boolean',
+      description:
+        'Payment arrived after this order had been released (e.g. delayed webhooks during an outage). Stock was re-taken and may be negative — check you can fulfil it, or refund.',
+    }),
+    defineField({
+      name: 'orderMissing',
+      title: '⚠️ Recreated from payment',
+      type: 'boolean',
+      description: 'Stripe reported a payment for an order that did not exist, so it was recreated. Review it.',
+    }),
     defineField({name: 'expectedAmount', title: 'Expected item amount (pence/cents)', type: 'number'}),
     defineField({name: 'expectedCurrency', title: 'Expected currency', type: 'string'}),
     defineField({name: 'amountSubtotal', title: 'Items subtotal charged (pence/cents)', type: 'number'}),
