@@ -7,6 +7,7 @@ import {
   markPaid,
   markProcessing,
   recordPaidOrder,
+  recordRefund,
   type PaymentDetails,
 } from '../orders';
 
@@ -109,6 +110,16 @@ export async function handleEvent(event: Stripe.Event): Promise<void> {
     case 'checkout.session.expired': {
       const session = event.data.object;
       if (session.metadata?.orderId) await markExpired(session.metadata.orderId, session.id);
+      break;
+    }
+
+    case 'charge.refunded': {
+      // Refund issued in the Stripe dashboard → update the order / door list.
+      const charge = event.data.object;
+      const pi = typeof charge.payment_intent === 'string' ? charge.payment_intent : charge.payment_intent?.id;
+      if (pi) {
+        await recordRefund(pi, { fullyRefunded: charge.refunded, amountRefunded: charge.amount_refunded });
+      }
       break;
     }
 

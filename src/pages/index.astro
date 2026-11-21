@@ -49,7 +49,7 @@ const heroCta = about?.heroCta?.label && about.heroCta.url ? about.heroCta : nul
 
 const soundcloudEmbed = settings.soundcloudUrl
   ? `https://w.soundcloud.com/player/?url=${encodeURIComponent(settings.soundcloudUrl)}` +
-    '&color=%23111111&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false'
+    '&color=%23111111&auto_play=true&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false'
   : null;
 
 const isUrl = (value?: string) => !!value && /^https?:\/\//i.test(value.trim());
@@ -120,13 +120,12 @@ const description = about?.bio?.split(/\n\s*\n/)[0] || `${artistName} — music,
         <h2 id="music-title" class="section-title">Music Archive</h2>
         {soundcloudEmbed ? (
           <>
-            <iframe
-              class="soundcloud"
-              src={soundcloudEmbed}
-              title={`${artistName} on SoundCloud`}
-              loading="lazy"
-              allow="autoplay"
-            ></iframe>
+            {/* Click-to-load: SoundCloud sets its own cookies, so the player only loads once the visitor asks for it (UK PECR). */}
+            <div class="soundcloud soundcloud-facade" data-soundcloud data-src={soundcloudEmbed} data-title={`${artistName} on SoundCloud`}>
+              <button type="button" class="button" data-soundcloud-load>Load SoundCloud player</button>
+              <p class="soundcloud-note">This loads a player from SoundCloud, which may set its own cookies.</p>
+              <a class="soundcloud-more" href="/legal/privacy#cookies">More about cookies</a>
+            </div>
             <p class="music-link">
               <a href={settings.soundcloudUrl} target="_blank" rel="noopener noreferrer">
                 Listen on SoundCloud<span class="visually-hidden"> (opens in a new tab)</span>
@@ -277,6 +276,37 @@ const description = about?.bio?.split(/\n\s*\n/)[0] || `${artistName} — music,
   </main>
 </Layout>
 
+<script>
+  // Swap the SoundCloud placeholder for the real player once the visitor asks for it.
+  // The choice is remembered on this device so returning visitors get the player straight away.
+  const KEY = 'soundcloud-ok';
+  for (const box of document.querySelectorAll<HTMLElement>('[data-soundcloud]')) {
+    const load = (autoplay: boolean) => {
+      const frame = document.createElement('iframe');
+      frame.className = 'soundcloud';
+      frame.title = box.dataset.title ?? 'SoundCloud player';
+      frame.allow = 'autoplay';
+      frame.loading = 'lazy';
+      frame.src = autoplay ? box.dataset.src! : box.dataset.src!.replace('auto_play=true', 'auto_play=false');
+      box.replaceWith(frame);
+    };
+    let remembered = false;
+    try {
+      remembered = localStorage.getItem(KEY) === '1';
+    } catch {}
+    if (remembered) {
+      load(false);
+      continue;
+    }
+    box.querySelector('[data-soundcloud-load]')?.addEventListener('click', () => {
+      try {
+        localStorage.setItem(KEY, '1');
+      } catch {}
+      load(true);
+    });
+  }
+</script>
+
 <style>
   /* ---------- Hero ---------- */
 
@@ -410,7 +440,8 @@ const description = about?.bio?.split(/\n\s*\n/)[0] || `${artistName} — music,
 
   /* ---------- Music ---------- */
 
-  .soundcloud {
+  /* :global so the player iframe, which is added by script after the click, gets these sizes too. */
+  :global(.soundcloud) {
     display: block;
     width: 100%;
     height: 380px;
@@ -418,8 +449,36 @@ const description = about?.bio?.split(/\n\s*\n/)[0] || `${artistName} — music,
     background: var(--color-surface);
   }
 
+  .soundcloud-facade {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    text-align: center;
+  }
+
+  .soundcloud-note {
+    margin: 0;
+    max-width: 36ch;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+  }
+
+  .soundcloud-more {
+    margin-top: calc(var(--space-2) * -1);
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--tap);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
   @media (min-width: 640px) {
-    .soundcloud {
+    :global(.soundcloud) {
       height: 450px;
     }
   }

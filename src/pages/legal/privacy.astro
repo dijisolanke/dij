@@ -1,0 +1,146 @@
+---
+import LegalPage from '../../components/LegalPage.astro';
+import { COMPANY } from '../../lib/company';
+
+const mail = `mailto:${COMPANY.email}`;
+---
+
+<LegalPage title="Privacy policy" description={`How ${COMPANY.registeredName} uses your personal information.`}>
+  <p>
+    This explains what personal information we collect when you use this website or buy from us, why, and your
+    rights. We only collect what we need, and we never sell your information.
+  </p>
+
+  <h2>Who's responsible for your information</h2>
+  <p>
+    {COMPANY.registeredName} (company number {COMPANY.registeredNumber}, registered office {COMPANY.registeredOffice})
+    is the controller of your personal information. Contact us about anything in this policy at{" "}
+    <a href={mail}>{COMPANY.email}</a>.
+  </p>
+
+  <h2>What we collect and why</h2>
+  <p>
+    Data protection law only lets us use your information if we have a good reason, and it gives those reasons
+    official names (called a "legal basis"). For each item below we say, in plain English, what the reason is.
+  </p>
+
+  <h3>When you buy something</h3>
+  <ul>
+    <li>
+      <strong>Your name and email address</strong> — to process your order, send your receipt, put you on the door list
+      for a show, and contact you about your order.
+    </li>
+    <li>
+      <strong>Your delivery address and phone number</strong> (merch only) — to deliver your order and contact you about
+      delivery.
+    </li>
+    <li><strong>What you bought, when, and how much you paid</strong> — to fulfil your order and keep our accounts.</li>
+    <li>
+      <strong>Payment details</strong> — your card details are collected and processed by Stripe, our payment provider.
+      We never see or store your full card number.
+    </li>
+  </ul>
+  <p>
+    <strong>Why we're allowed to:</strong> when you buy something you're making an agreement with us, and we can't
+    deliver your order or let you into a show without these details. The law calls this{" "}
+    <strong>"performing a contract"</strong>. We also have to keep records of sales for tax and company accounts, so
+    we keep order and payment details for as long as the law says — this is called a <strong>"legal obligation"</strong>.
+  </p>
+
+  <h3>When you email us</h3>
+  <p>We use your email address and what you write to reply to you. That's all.</p>
+  <p>
+    <strong>Why we're allowed to:</strong> if your email is about an order, it's part of our agreement with you
+    (<strong>"performing a contract"</strong>, as above). Otherwise, it's simply that you've contacted us and
+    replying is a reasonable thing to do — the law calls this a <strong>"legitimate interest"</strong>: a genuine
+    reason that you'd expect, and that doesn't override your rights.
+  </p>
+
+  <h3>Keeping the site and payments secure</h3>
+  <p>
+    To stop bots, fraud and stolen cards, our website host (Cloudflare) looks at basic technical details such as your
+    IP address (your device's internet address) and which browser you're using, and Stripe checks each payment for
+    signs of fraud. These checks are automatic. Very occasionally they may block a genuine payment by mistake — if that
+    happens to you, email us and a real person will look into it.
+  </p>
+  <p>
+    <strong>Why we're allowed to:</strong> keeping the site, your payment and our business safe from fraud is a{" "}
+    <strong>"legitimate interest"</strong> (explained above). We only use these details for security, never for
+    advertising.
+  </p>
+
+  <h3>Marketing</h3>
+  <p>We don't send you marketing emails unless you've separately and explicitly agreed to receive them.</p>
+
+  <h2>Who we share it with</h2>
+  <p>We use trusted service providers who process information on our behalf, under contracts that protect it:</p>
+  <ul>
+    <li><strong>Stripe</strong> — payment processing, fraud prevention and receipts.</li>
+    <li><strong>Cloudflare</strong> — website hosting, security and bot protection (Cloudflare Turnstile).</li>
+    <li><strong>Sanity</strong> — stores our website content and order records.</li>
+    <li><strong>Google</strong> — our email provider, if you email us.</li>
+  </ul>
+  <p>
+    We may also share information if the law requires it (for example with HMRC), or with delivery companies to get
+    your order to you.
+  </p>
+
+  <h2>International transfers</h2>
+  <p>
+    Some of these providers store or process information outside the UK, including in the United States. Where they
+    do, the transfer is protected by safeguards recognised under UK data protection law, such as the UK–US data
+    bridge or the UK's International Data Transfer Agreement / Addendum.
+  </p>
+
+  <h2>How long we keep it</h2>
+  <ul>
+    <li>
+      <strong>Order and payment records:</strong> 6 years from the end of the financial year they relate to, as required
+      for tax and accounting.
+    </li>
+    <li><strong>Emails with us:</strong> as long as needed to deal with your query, then deleted.</li>
+    <li><strong>Security logs:</strong> kept only briefly by our providers.</li>
+  </ul>
+
+  <h2 id="cookies">Cookies</h2>
+  <p>
+    We don't use advertising or analytics cookies. The only cookies or similar storage set while you shop are
+    strictly necessary ones from Stripe (to take payment securely) and Cloudflare (to protect the site from bots).
+  </p>
+  <p>
+    Some content comes from other services, which may set their own cookies under their own privacy policies:
+  </p>
+  <ul>
+    <li>
+      <strong>SoundCloud player</strong> — doesn't load until you press "Load SoundCloud player". If you do, your
+      browser remembers that choice (a small setting saved in your browser — it's never sent to us) so the player loads
+      straight away next time. Clear your browser's site data to undo it.
+    </li>
+    <li>
+      <strong>YouTube and Vimeo videos</strong> — only load when you press play (or briefly when you hover over one
+      with a mouse, to show a preview). We use YouTube's privacy-enhanced mode and Vimeo's "do not track" setting to
+      keep their cookies to a minimum.
+    </li>
+  </ul>
+
+  <h2>Your rights</h2>
+  <p>Under UK data protection law you have the right to:</p>
+  <ul>
+    <li>ask for a copy of the information we hold about you;</li>
+    <li>ask us to correct information that's wrong;</li>
+    <li>ask us to delete your information (unless we have to keep it by law);</li>
+    <li>object to, or ask us to restrict, how we use it;</li>
+    <li>ask for your information in a portable format.</li>
+  </ul>
+  <p>
+    To use any of these rights, email <a href={mail}>{COMPANY.email}</a>. We'll respond within one month. If you're
+    unhappy with how we've handled your information, you can complain to the Information Commissioner's Office
+    (ICO) at <a href="https://ico.org.uk/make-a-complaint/" rel="noopener noreferrer" target="_blank">ico.org.uk</a>{" "}
+    — though we'd appreciate the chance to sort it out first.
+  </p>
+
+  <h2>Changes</h2>
+  <p>We'll update this page if how we use your information changes. The date at the top shows the latest version.</p>
+
+  <p>See also our <a href="/legal/terms">terms of sale</a>.</p>
+</LegalPage>

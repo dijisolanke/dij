@@ -19,7 +19,7 @@ import type { SanityImage } from './sanity';
  * (unauthenticated) API — only with a token or in the Studio.
  */
 
-export type OrderStatus = 'pending' | 'processing' | 'paid' | 'expired' | 'cancelled' | 'failed';
+export type OrderStatus = 'pending' | 'processing' | 'paid' | 'expired' | 'cancelled' | 'failed' | 'refunded';
 
 /** Statuses where the reservation has been given back. */
 const RELEASED: OrderStatus[] = ['expired', 'cancelled', 'failed'];
@@ -497,6 +497,39 @@ export async function recordPaidOrder(
     if (isConflict(err)) return false; // another delivery created it first
     throw err;
   }
+}
+
+/**
+ * A refund issued in the Stripe dashboard (charge.refunded webhook).
+ *  - Full refund → status "refunded" (drops off the door list). Tickets give
+ *    their place back so it can be resold. Merch is NOT restocked
+ *    automatically — a returned item may not be resellable; adjust stock by hand.
+ *  - Partial refund (e.g. 1 of 2 tickets) → order stays "paid", flagged with
+ *    the amount refunded, so whoever runs the shop can see and adjust.
+ * Idempotent: repeated deliveries set the same values.
+ */
+export async function recordRefund(
+  paymentIntentId: string,
+  refund: { fullyRefunded: boolean; amountRefunded: number },
+): Promise<boolean> {
+  const order = await sanityWrite.fetch<{ _id: string; kind?: string } | null>(
+    `*[_type == "order" && stripePaymentIntentId == $pi][0]{_id, kind}`,
+    { pi: paymentIntentId },
+  );
+  if (!order) return false; // not one of ours (or recorded before PI IDs were stored)
+  const orderId = orderIdFromDocId(order._id);
+  const fields = { amountRefunded: refund.amountRefunded, refundedAt: now() };
+
+  if (refund.fullyRefunded) {
+    return transition(
+      orderId,
+      ['paid', 'processing'],
+      'refunded',
+      { ...fields, partiallyRefunded: false },
+      order.kind === 'ticket' ? 'release' : undefined,
+    );
+  }
+  return transition(orderId, ['paid'], 'paid', { ...fields, partiallyRefunded: true });
 }
 
 /** Pending orders older than the cutoff: candidates for the scheduled cleanup. */

@@ -6,6 +6,7 @@ import Layout from '../../layouts/Layout.astro';
 import Icon from '../../components/Icon.astro';
 import { getGig, getSiteSettings, isGigSoldOut, isTicketTypeSoldOut, type Gig, type SiteSettings } from '../../lib/sanity';
 import { PUBLIC_TURNSTILE_SITE_KEY } from 'astro:env/client';
+import { TICKET_REFUND_DAYS } from '../../lib/company';
 
 const { gigId } = Astro.params;
 
@@ -124,9 +125,12 @@ const LOW_STOCK = 10;
         {/* Bot check: invisible unless Cloudflare needs the visitor to tick a box. */}
         {anyBuyable && <div class="turnstile" data-turnstile></div>}
         {anyBuyable && (
+          // Key terms must be shown before purchase, incl. that there's no 14-day cancellation right.
           <p class="small-print">
-            Your name and email go on the door list for this show. Bring your confirmation email or the card you paid
-            with.
+            Your name goes on the door list. Bring your confirmation email or the card you paid with. Full refund if
+            you ask at least {TICKET_REFUND_DAYS} days before the show; after that tickets can't be refunded (the 14-day
+            right to cancel doesn't apply to event tickets). Age limits and entry rules are on the listing. By buying
+            you agree to our <a href="/legal/terms">terms of sale</a>.
           </p>
         )}
       </>
@@ -325,5 +329,10 @@ const LOW_STOCK = 10;
     margin-top: var(--space-3);
     font-size: 0.85rem;
     color: var(--color-text-muted);
+  }
+
+  .small-print a {
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
 </style>

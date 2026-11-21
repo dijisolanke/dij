@@ -78,6 +78,13 @@ const buyable = !!item && shopEnabled && !isSoldOut(item);
           )}
           {/* Bot check: invisible unless Cloudflare needs the visitor to tick a box. */}
           {buyable && <div class="turnstile" data-turnstile></div>}
+          {buyable && (
+            // Key terms must be shown before purchase (Consumer Contracts Regs 2013).
+            <p class="terms-note">
+              Price includes delivery. 14-day returns — you pay return postage. Orders outside the UK may have import
+              duties on arrival. By buying you agree to our <a href="/legal/terms">terms of sale</a>.
+            </p>
+          )}
           <p id="buy-error" class="buy-error" role="alert" hidden>Something went wrong — please try again.</p>
         </div>
       </div>
@@ -160,6 +167,18 @@ const buyable = !!item && shopEnabled && !isSoldOut(item);
 
   .turnstile:empty {
     display: none;
+  }
+
+  .terms-note {
+    margin-top: var(--space-2);
+    max-width: 45ch;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+  }
+
+  .terms-note a {
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
 
   .buy-error {

@@ -13,7 +13,7 @@ export default defineType({
       name: 'status',
       title: 'Status',
       type: 'string',
-      options: {list: ['pending', 'processing', 'paid', 'expired', 'cancelled', 'failed']},
+      options: {list: ['pending', 'processing', 'paid', 'expired', 'cancelled', 'failed', 'refunded']},
     }),
     defineField({
       name: 'kind',
@@ -38,6 +38,14 @@ export default defineType({
       type: 'number',
     }),
     defineField({name: 'currency', title: 'Currency', type: 'string'}),
+    defineField({
+      name: 'partiallyRefunded',
+      title: 'Partly refunded',
+      type: 'boolean',
+      description: 'Some of this order was refunded in Stripe. Check the door list / stock if needed.',
+    }),
+    defineField({name: 'amountRefunded', title: 'Amount refunded (pence/cents)', type: 'number'}),
+    defineField({name: 'refundedAt', title: 'Refunded', type: 'datetime'}),
     defineField({
       name: 'amountMismatch',
       title: '⚠️ Amount mismatch',

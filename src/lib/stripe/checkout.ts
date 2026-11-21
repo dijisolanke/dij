@@ -4,6 +4,7 @@ import { stripe } from './client';
 import { SHIPPING_COUNTRIES } from './countries';
 import { urlFor } from '../sanity';
 import { itemCurrency, toMinorUnits, type Sellable } from '../orders';
+import { TICKET_REFUND_DAYS } from '../company';
 
 // Stripe's minimum is 30 minutes from creation; a minute of slack covers
 // clock skew / request latency. Expired sessions release reserved stock.
@@ -47,6 +48,15 @@ export async function createCheckoutSession(opts: {
     payment_intent_data: { metadata },
     expires_at: Math.floor(Date.now() / 1000) + SESSION_LIFETIME_SECONDS,
     success_url: `${siteUrl}/shop/success?session_id={CHECKOUT_SESSION_ID}`,
+    // Shown above the Pay button on Stripe's page (Markdown links supported).
+    custom_text: {
+      submit: {
+        message:
+          item.kind === 'ticket'
+            ? `Full refund if requested at least ${TICKET_REFUND_DAYS} days before the show. By paying you agree to our [terms of sale](${siteUrl}/legal/terms).`
+            : `14-day returns, return postage paid by you. By paying you agree to our [terms of sale](${siteUrl}/legal/terms).`,
+      },
+    },
     cancel_url: `${siteUrl}${item.returnPath}`,
   };
 

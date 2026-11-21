@@ -1,15 +1,25 @@
 ---
+import { COMPANY } from '../lib/company';
+
 interface Props {
   siteName: string;
 }
 
-// const { siteName } = Astro.props;
 const year = new Date().getFullYear();
 ---
 
 <footer class="footer">
   <div class="container">
-    <p>&copy; {year} IHDY Limited. All rights reserved.</p>
+    <nav class="legal-links" aria-label="Legal">
+      <a href="/legal/terms">Terms of sale</a>
+      <a href="/legal/privacy">Privacy</a>
+      <a href={`mailto:${COMPANY.email}`}>Contact</a>
+    </nav>
+    {/* Company details required on UK company websites (Trading Disclosures Regs 2015). */}
+    <p class="company">
+      &copy; {year} {COMPANY.registeredName}. Registered in {COMPANY.registeredIn}, company no. {COMPANY.registeredNumber}.
+      Registered office: {COMPANY.registeredOffice}.
+    </p>
   </div>
 </footer>
 
@@ -20,9 +30,36 @@ const year = new Date().getFullYear();
     text-align: center;
   }
 
-  .footer p {
-    margin: 0;
+  .legal-links {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0 var(--space-2);
+    margin-bottom: var(--space-1);
+  }
+
+  /* 44px tall tap targets on phones. */
+  .legal-links a {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--tap);
     font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    text-decoration: none;
+  }
+
+  .legal-links a:hover {
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
+
+  .company {
+    margin: 0 auto;
+    max-width: 60ch;
+    font-size: 0.8rem;
+    line-height: 1.5;
     color: var(--color-text-muted);
   }
 </style>
