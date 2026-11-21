@@ -3,7 +3,7 @@ import { STRIPE_SHIPPING_RATE_IDS } from 'astro:env/server';
 import { stripe } from './client';
 import { SHIPPING_COUNTRIES } from './countries';
 import { urlFor } from '../sanity';
-import { itemCurrency, toMinorUnits, type CheckoutItem } from '../orders';
+import { itemCurrency, toMinorUnits, type Sellable } from '../orders';
 
 // Stripe's minimum is 30 minutes from creation; a minute of slack covers
 // clock skew / request latency. Expired sessions release reserved stock.
@@ -15,14 +15,15 @@ const shippingRateIds = (STRIPE_SHIPPING_RATE_IDS ?? '')
   .filter(Boolean);
 
 export async function createCheckoutSession(opts: {
-  item: CheckoutItem;
+  item: Sellable;
   qty: number;
   orderId: string;
   siteUrl: string;
 }): Promise<Stripe.Checkout.Session> {
   const { item, qty, orderId, siteUrl } = opts;
-  const metadata = { orderId, itemId: item._id, qty: String(qty) };
-  const isPhysical = item.type === 'physical';
+  // itemId/qty/stockPath let the webhook rebuild the order if it's ever missing.
+  const metadata = { orderId, kind: item.kind, itemId: item.docId, qty: String(qty), stockPath: item.stockPath };
+  const isPhysical = item.requiresShipping;
 
   const params: Stripe.Checkout.SessionCreateParams = {
     mode: 'payment',
@@ -46,7 +47,7 @@ export async function createCheckoutSession(opts: {
     payment_intent_data: { metadata },
     expires_at: Math.floor(Date.now() / 1000) + SESSION_LIFETIME_SECONDS,
     success_url: `${siteUrl}/shop/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${siteUrl}/shop/${item.slug.current}`,
+    cancel_url: `${siteUrl}${item.returnPath}`,
   };
 
   if (isPhysical) {

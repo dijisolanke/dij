@@ -3,20 +3,25 @@ import { PUBLIC_SITE_URL } from 'astro:env/server';
 import { createCheckoutSession } from '../../lib/stripe/checkout';
 import {
   BusyError,
+  SalesClosedError,
   SoldOutError,
   attachSession,
   cancelOrder,
-  getCheckoutItem,
   getShopEnabled,
+  getShopSellable,
+  getTicketSellable,
   reserveAndCreateOrder,
+  type Sellable,
 } from '../../lib/orders';
 import { verifyTurnstile } from '../../lib/turnstile';
 
 export const prerender = false;
 
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+// Sanity document IDs and array keys: letters, digits, dashes, underscores (+ dots for IDs).
+const DOC_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+const KEY_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const MAX_BODY_BYTES = 1024;
-const DEFAULT_MAX_PER_ORDER = 4;
 
 const json = (body: unknown, status: number) =>
   new Response(JSON.stringify(body), {
@@ -43,20 +48,26 @@ export const POST: APIRoute = async ({ request }) => {
     return json({ error: 'Bad request' }, 415);
   }
 
-  // --- Parse + validate input (never trust the client for anything but slug + qty) ---
+  // --- Parse + validate input (the client only sends IDs + qty; never prices) ---
   const raw = await request.text();
   if (raw.length > MAX_BODY_BYTES) return json({ error: 'Bad request' }, 413);
 
-  let body: { slug?: unknown; qty?: unknown; turnstileToken?: unknown };
+  let body: { slug?: unknown; gigId?: unknown; ticketKey?: unknown; qty?: unknown; turnstileToken?: unknown };
   try {
     body = JSON.parse(raw);
   } catch {
     return json({ error: 'Bad request' }, 400);
   }
 
-  const { slug } = body;
+  // Either merch ({ slug }) or a ticket ({ gigId, ticketKey }).
+  const { slug, gigId, ticketKey } = body;
   const qty = body.qty === undefined ? 1 : body.qty;
-  if (typeof slug !== 'string' || slug.length > 96 || !SLUG_RE.test(slug)) {
+  const isTicket = gigId !== undefined || ticketKey !== undefined;
+  if (isTicket) {
+    if (typeof gigId !== 'string' || !DOC_ID_RE.test(gigId) || typeof ticketKey !== 'string' || !KEY_RE.test(ticketKey)) {
+      return json({ error: 'Bad request' }, 400);
+    }
+  } else if (typeof slug !== 'string' || slug.length > 96 || !SLUG_RE.test(slug)) {
     return json({ error: 'Bad request' }, 400);
   }
   if (typeof qty !== 'number' || !Number.isInteger(qty) || qty < 1) {
@@ -70,13 +81,20 @@ export const POST: APIRoute = async ({ request }) => {
 
   try {
     // Fresh (non-CDN) reads: checkout must never act on stale settings/prices/stock.
-    if (!(await getShopEnabled())) return json({ error: 'Shop is not open yet' }, 403);
-
-    const item = await getCheckoutItem(slug);
-    if (!item) return json({ error: 'Item not found' }, 404);
-    if (qty > (item.maxPerOrder ?? DEFAULT_MAX_PER_ORDER)) {
-      return json({ error: 'Invalid quantity' }, 400);
+    let item: Sellable | null;
+    if (isTicket) {
+      // Tickets are switched on per gig ("Sold on this site"), not by the shop switch.
+      try {
+        item = await getTicketSellable(gigId as string, ticketKey as string);
+      } catch (err) {
+        if (err instanceof SalesClosedError) return json({ error: err.message }, 409);
+        throw err;
+      }
+    } else {
+      if (!(await getShopEnabled())) return json({ error: 'Shop is not open yet' }, 403);
+      item = await getShopSellable(slug as string);
     }
+    if (!item) return json({ error: 'Item not found' }, 404);
 
     // --- Reserve stock + create pending order (atomic) ---
     const orderId = crypto.randomUUID();
@@ -84,6 +102,7 @@ export const POST: APIRoute = async ({ request }) => {
       await reserveAndCreateOrder(item, orderId, qty);
     } catch (err) {
       if (err instanceof SoldOutError) return json({ error: 'Sold out' }, 409);
+      if (err instanceof RangeError) return json({ error: 'Invalid quantity' }, 400);
       throw err;
     }
 

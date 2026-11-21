@@ -58,10 +58,15 @@ export default defineType({
       name: 'type',
       title: 'Item type',
       type: 'string',
-      options: {list: ['digital-ticket', 'physical']},
-      initialValue: 'digital-ticket',
+      options: {
+        list: [
+          {title: 'Physical merch (shipped)', value: 'physical'},
+          {title: 'Ticket (old — no longer sold in the shop)', value: 'digital-ticket'},
+        ],
+      },
+      initialValue: 'physical',
       description:
-        'digital-ticket = no shipping needed. physical = reserved for future merch drops that require shipping.',
+        'Show tickets are now set up on the Gig itself (Gig → Tickets → "Sold on this site"). Items marked "Ticket" are hidden from the shop.',
       validation: (Rule) => Rule.required(),
     }),
     defineField({

@@ -15,8 +15,22 @@ export default defineType({
       type: 'string',
       options: {list: ['pending', 'processing', 'paid', 'expired', 'cancelled', 'failed']},
     }),
-    defineField({name: 'item', title: 'Item', type: 'reference', to: [{type: 'shopItem'}], weak: true}),
+    defineField({
+      name: 'kind',
+      title: 'Type',
+      type: 'string',
+      options: {list: [{title: 'Merch', value: 'merch'}, {title: 'Ticket', value: 'ticket'}]},
+    }),
+    defineField({
+      name: 'item',
+      title: 'Item / gig',
+      type: 'reference',
+      to: [{type: 'shopItem'}, {type: 'gig'}],
+      weak: true,
+    }),
     defineField({name: 'itemTitle', title: 'Item title (at time of order)', type: 'string'}),
+    defineField({name: 'ticketTypeName', title: 'Ticket type', type: 'string', hidden: ({document}) => document?.kind !== 'ticket'}),
+    defineField({name: 'eventDate', title: 'Event date', type: 'datetime', hidden: ({document}) => document?.kind !== 'ticket'}),
     defineField({name: 'qty', title: 'Quantity', type: 'number'}),
     defineField({
       name: 'amountTotal',
@@ -71,6 +85,9 @@ export default defineType({
       options: {list: ['site', 'payment-link']},
     }),
     defineField({name: 'stockReserved', title: 'Stock reserved', type: 'boolean'}),
+    // Technical: where on the item document the stock count lives.
+    defineField({name: 'stockPath', title: 'Stock field (technical)', type: 'string', hidden: true}),
+    defineField({name: 'ticketTypeKey', title: 'Ticket type key (technical)', type: 'string', hidden: true}),
     defineField({name: 'stripeSessionId', title: 'Stripe Checkout Session', type: 'string'}),
     defineField({name: 'stripePaymentIntentId', title: 'Stripe Payment', type: 'string'}),
     defineField({name: 'createdAt', title: 'Created', type: 'datetime'}),
@@ -80,10 +97,26 @@ export default defineType({
     {title: 'Newest first', name: 'createdAtDesc', by: [{field: 'createdAt', direction: 'desc'}]},
   ],
   preview: {
-    select: {item: 'itemTitle', qty: 'qty', status: 'status', email: 'customerEmail', createdAt: 'createdAt'},
-    prepare: ({item, qty, status, email, createdAt}) => ({
-      title: `${item ?? 'Item'} × ${qty ?? 1} — ${status ?? ''}`,
-      subtitle: [email, createdAt?.slice(0, 16).replace('T', ' ')].filter(Boolean).join(' · '),
-    }),
+    select: {
+      item: 'itemTitle',
+      qty: 'qty',
+      status: 'status',
+      kind: 'kind',
+      ticketType: 'ticketTypeName',
+      name: 'customerName',
+      email: 'customerEmail',
+      createdAt: 'createdAt',
+    },
+    prepare: ({item, qty, status, kind, ticketType, name, email, createdAt}) =>
+      kind === 'ticket'
+        ? {
+            // Door-list friendly: who, how many, which ticket.
+            title: `${name ?? email ?? 'Guest'} × ${qty ?? 1} — ${ticketType ?? 'Ticket'}`,
+            subtitle: [status, item, email].filter(Boolean).join(' · '),
+          }
+        : {
+            title: `${item ?? 'Item'} × ${qty ?? 1} — ${status ?? ''}`,
+            subtitle: [email, createdAt?.slice(0, 16).replace('T', ' ')].filter(Boolean).join(' · '),
+          },
   },
 })

@@ -11,6 +11,8 @@ import type { SanityImage } from './sanity';
  * - Money taken always wins: a payment is recorded even if its order was
  *   already released or is missing (flagged for review), never dropped.
  * - Stuck reservations are released by the scheduled cleanup (reconcile.ts).
+ * - Works for merch (stock on a shopItem) and tickets (stock on one ticket type
+ *   inside a gig): every order records `stockPath`, the exact field it holds.
  *
  * Order IDs use the `orders.` prefix. Sanity treats IDs containing a dot as
  * private, so customer emails/addresses are never readable through the public
@@ -22,19 +24,37 @@ export type OrderStatus = 'pending' | 'processing' | 'paid' | 'expired' | 'cance
 /** Statuses where the reservation has been given back. */
 const RELEASED: OrderStatus[] = ['expired', 'cancelled', 'failed'];
 
-export interface CheckoutItem {
-  _id: string;
+/** Default stock field on a shopItem. */
+export const SHOP_STOCK_PATH = 'stock';
+/** Stock field of one ticket type inside a gig document. */
+export const ticketStockPath = (key: string) => `ticketTypes[_key=="${key}"].stock`;
+const TICKET_PATH_RE = /^ticketTypes\[_key=="([^"]+)"\]\.stock$/;
+
+/**
+ * Anything the checkout can sell: a merch item or one ticket type of a gig.
+ * Built server-side from fresh Sanity data — the client only ever sends IDs.
+ */
+export interface Sellable {
+  kind: 'merch' | 'ticket';
+  /** Sanity document that holds the stock (shopItem or gig). */
+  docId: string;
+  /** Field on that document holding the stock count. */
+  stockPath: string;
+  /** Name shown in Stripe Checkout and on the order. */
   title: string;
-  slug: { current: string };
   description?: string;
   price: number;
   currency?: string;
-  type: 'digital-ticket' | 'physical';
   images?: SanityImage[];
-  soldOut?: boolean;
   /** Undefined/null = unlimited. */
   stock?: number | null;
   maxPerOrder?: number;
+  soldOut?: boolean;
+  requiresShipping: boolean;
+  /** Where "back"/cancel in Stripe Checkout returns to (site-relative path). */
+  returnPath: string;
+  /** Extra fields stored on the order (e.g. ticket type, event date). */
+  orderFields?: Record<string, unknown>;
 }
 
 export interface OrderDoc {
@@ -48,6 +68,7 @@ export interface OrderDoc {
   expectedCurrency?: string;
   createdAt?: string;
   stripeSessionId?: string;
+  stockPath?: string;
 }
 
 export class SoldOutError extends Error {}
@@ -61,14 +82,14 @@ const SUPPORTED_CURRENCIES = new Set(['gbp', 'usd', 'eur']);
 /** Whole currency units from Sanity → integer minor units (pence) for Stripe. */
 export const toMinorUnits = (amount: number) => Math.round(amount * 100);
 
-export function itemCurrency(item: Pick<CheckoutItem, 'currency'>): string {
+export function itemCurrency(item: Pick<Sellable, 'currency'>): string {
   const currency = (item.currency || 'gbp').toLowerCase();
   if (!SUPPORTED_CURRENCIES.has(currency)) throw new Error(`Unsupported currency: ${currency}`);
   return currency;
 }
 
 const MAX_ATTEMPTS = 4;
-const DEFAULT_MAX_PER_ORDER = 4;
+const DEFAULT_MAX_PER_ORDER = { merch: 4, ticket: 6 } as const;
 
 export const orderDocId = (orderId: string) => `orders.${orderId}`;
 export const orderIdFromDocId = (docId: string) => docId.replace(/^orders\./, '');
@@ -107,13 +128,113 @@ export async function getShopEnabled(): Promise<boolean> {
   return enabled === true;
 }
 
-export async function getCheckoutItem(slug: string): Promise<CheckoutItem | null> {
-  return sanityWrite.fetch(
-    `*[_type == "shopItem" && slug.current == $slug][0]{
+/** A merch item by slug. Old "digital-ticket" shop items can no longer be bought here. */
+export async function getShopSellable(slug: string): Promise<Sellable | null> {
+  const item = await sanityWrite.fetch<{
+    _id: string;
+    title: string;
+    slug: { current: string };
+    description?: string;
+    price: number;
+    currency?: string;
+    type?: string;
+    images?: SanityImage[];
+    soldOut?: boolean;
+    stock?: number | null;
+    maxPerOrder?: number;
+  } | null>(
+    `*[_type == "shopItem" && slug.current == $slug && type != "digital-ticket"][0]{
       _id, title, slug, description, price, currency, type, images, soldOut, stock, maxPerOrder
     }`,
     { slug },
   );
+  if (!item) return null;
+  return {
+    kind: 'merch',
+    docId: item._id,
+    stockPath: SHOP_STOCK_PATH,
+    title: item.title,
+    description: item.description,
+    price: item.price,
+    currency: item.currency,
+    images: item.images,
+    stock: item.stock,
+    maxPerOrder: item.maxPerOrder,
+    soldOut: item.soldOut,
+    requiresShipping: true,
+    returnPath: `/shop/${item.slug.current}`,
+  };
+}
+
+export class SalesClosedError extends Error {}
+
+/** One ticket type of a gig sold on this site. Throws SalesClosedError if it can't be bought now. */
+export async function getTicketSellable(gigId: string, ticketKey: string): Promise<Sellable | null> {
+  const gig = await sanityWrite.fetch<{
+    _id: string;
+    title?: string;
+    venue: string;
+    city: string;
+    date: string;
+    ticketing?: string;
+    currency?: string;
+    soldOut?: boolean;
+    ticketTypes?: Array<{
+      _key: string;
+      name: string;
+      price: number;
+      stock?: number | null;
+      maxPerOrder?: number;
+      soldOut?: boolean;
+      description?: string;
+    }>;
+  } | null>(`*[_type == "gig" && _id == $gigId][0]{_id, title, venue, city, date, ticketing, currency, soldOut, ticketTypes}`, {
+    gigId,
+  });
+  const type = gig?.ticketTypes?.find((t) => t._key === ticketKey);
+  if (!gig || !type) return null;
+  if (gig.ticketing !== 'onsite') throw new SalesClosedError('Tickets are not sold on this site');
+  if (new Date(gig.date).getTime() <= Date.now()) throw new SalesClosedError('Ticket sales have closed');
+
+  const eventName = gig.title || gig.venue;
+  const when = new Date(gig.date).toLocaleString('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Europe/London',
+  });
+  return {
+    kind: 'ticket',
+    docId: gig._id,
+    stockPath: ticketStockPath(type._key),
+    title: `${eventName} — ${type.name}`,
+    description: `${when} · ${gig.venue}, ${gig.city}${type.description ? ` · ${type.description}` : ''}`,
+    price: type.price,
+    currency: gig.currency,
+    stock: type.stock,
+    maxPerOrder: type.maxPerOrder,
+    soldOut: gig.soldOut || type.soldOut,
+    requiresShipping: false,
+    returnPath: `/tickets/${gig._id}`,
+    orderFields: {
+      ticketTypeName: type.name,
+      ticketTypeKey: type._key,
+      eventDate: gig.date,
+    },
+  };
+}
+
+/** Reads the stock value at `stockPath` from a (returned) document. */
+function readStock(doc: Record<string, unknown> | undefined, stockPath: string): number | undefined {
+  if (!doc) return undefined;
+  const match = stockPath.match(TICKET_PATH_RE);
+  const value = match
+    ? (doc.ticketTypes as Array<{ _key: string; stock?: number }> | undefined)?.find((t) => t._key === match[1])?.stock
+    : (doc as { stock?: number }).stock;
+  return typeof value === 'number' ? value : undefined;
 }
 
 /**
@@ -130,10 +251,10 @@ export async function getCheckoutItem(slug: string): Promise<CheckoutItem | null
  * their rollback lands, so someone may momentarily see "sold out" for a unit
  * that's about to come back (UI should say "check back shortly").
  */
-export async function reserveAndCreateOrder(item: CheckoutItem, orderId: string, qty: number): Promise<void> {
+export async function reserveAndCreateOrder(item: Sellable, orderId: string, qty: number): Promise<void> {
   // This function is the trust boundary for stock: never rely on the caller alone.
   // (A negative qty would make `dec` *add* stock.)
-  if (!Number.isInteger(qty) || qty < 1 || qty > (item.maxPerOrder ?? DEFAULT_MAX_PER_ORDER)) {
+  if (!Number.isInteger(qty) || qty < 1 || qty > (item.maxPerOrder ?? DEFAULT_MAX_PER_ORDER[item.kind])) {
     throw new RangeError('Invalid quantity');
   }
   const currency = itemCurrency(item);
@@ -145,18 +266,21 @@ export async function reserveAndCreateOrder(item: CheckoutItem, orderId: string,
   const docId = orderDocId(orderId);
   const docs = await withRateLimitRetry(() => {
     const tx = sanityWrite.transaction();
-    if (tracksStock) tx.patch(item._id, (p) => p.dec({ stock: qty }));
+    if (tracksStock) tx.patch(item.docId, (p) => p.dec({ [item.stockPath]: qty }));
     tx.create({
       _id: docId,
       _type: 'order',
       status: 'pending' satisfies OrderStatus,
-      item: { _type: 'reference', _ref: item._id, _weak: true },
+      kind: item.kind,
+      item: { _type: 'reference', _ref: item.docId, _weak: true },
       itemTitle: item.title,
+      ...item.orderFields,
       qty,
       // Snapshot of what Stripe should charge (excl. shipping), checked by the webhook.
       expectedAmount: toMinorUnits(item.price) * qty,
       expectedCurrency: currency,
       stockReserved: tracksStock,
+      stockPath: item.stockPath,
       source: 'site',
       createdAt: now(),
     });
@@ -164,18 +288,18 @@ export async function reserveAndCreateOrder(item: CheckoutItem, orderId: string,
   });
 
   if (!tracksStock) return;
-  const stockAfter = (docs.find((d) => d._id === item._id) as { stock?: number } | undefined)?.stock;
+  const stockAfter = readStock(docs.find((d) => d._id === item.docId), item.stockPath);
   if (typeof stockAfter === 'number' && stockAfter >= 0) return;
 
   // Oversubscribed: undo our reservation. If this fails, the scheduled
   // cleanup releases the order later (it has no Stripe session).
   try {
     await withRateLimitRetry(
-      () => sanityWrite.transaction().patch(item._id, (p) => p.inc({ stock: qty })).delete(docId).commit(),
+      () => sanityWrite.transaction().patch(item.docId, (p) => p.inc({ [item.stockPath]: qty })).delete(docId).commit(),
       20_000,
     );
   } catch (err) {
-    console.error('Stock rollback failed; scheduled cleanup will release it', { itemId: item._id, qty, orderId }, err);
+    console.error('Stock rollback failed; scheduled cleanup will release it', { docId: item.docId, qty, orderId }, err);
   }
   throw new SoldOutError('Not enough stock');
 }
@@ -214,8 +338,9 @@ async function transition(
         tx.patch(order._id, (p) => p.ifRevisionId(order._rev).set({ ...extra, status: to, updatedAt: now() }));
         if (adjustStock) {
           // inc/dec are atomic in Sanity; no revision lock needed on the item.
+          const path = order.stockPath ?? SHOP_STOCK_PATH;
           tx.patch(itemId!, (p) =>
-            stockChange === 'release' ? p.inc({ stock: order.qty }) : p.dec({ stock: order.qty }),
+            stockChange === 'release' ? p.inc({ [path]: order.qty }) : p.dec({ [path]: order.qty }),
           );
         }
         return tx.commit();
@@ -281,7 +406,7 @@ const paidFields = (details: PaymentDetails, flags: Record<string, unknown> = {}
 export async function markPaid(
   orderId: string,
   details: PaymentDetails,
-  fallback: { itemId?: string; qty?: number } = {},
+  fallback: { itemId?: string; qty?: number; stockPath?: string; kind?: string } = {},
 ): Promise<void> {
   if (await transition(orderId, ['pending', 'processing'], 'paid', paidFields(details))) return;
 
@@ -296,10 +421,14 @@ export async function markPaid(
 
   if (!order && fallback.itemId) {
     console.error('PAID BUT ORDER MISSING — recreating', orderId);
-    await recordPaidOrder(orderId, fallback.itemId, fallback.qty ?? 1, details, {
-      source: 'site',
-      orderMissing: true,
-    });
+    await recordPaidOrder(
+      orderId,
+      fallback.itemId,
+      fallback.qty ?? 1,
+      details,
+      { source: 'site', orderMissing: true, ...(fallback.kind ? { kind: fallback.kind } : {}) },
+      fallback.stockPath,
+    );
     return;
   }
 
@@ -332,13 +461,15 @@ export async function recordPaidOrder(
   qty: number,
   details: PaymentDetails,
   extra: Record<string, unknown> = { source: 'payment-link' },
+  stockPath: string = SHOP_STOCK_PATH,
 ): Promise<boolean> {
   if (await getOrder(orderId)) return false;
 
-  const item = await sanityWrite.fetch<{ _id: string; title: string; stock?: number | null } | null>(
-    `*[_id == $id][0]{_id, title, stock}`,
-    { id: itemId },
-  );
+  // Works for shop items (stock) and gigs (ticketTypes[_key==…].stock).
+  const item = await sanityWrite.fetch<
+    ({ _id: string; title?: string; venue?: string } & Record<string, unknown>) | null
+  >(`*[_id == $id][0]{_id, title, venue, stock, ticketTypes}`, { id: itemId });
+  const tracksStock = readStock(item ?? undefined, stockPath) !== undefined;
 
   try {
     await withRateLimitRetry(() => {
@@ -348,15 +479,16 @@ export async function recordPaidOrder(
         _type: 'order',
         status: 'paid' satisfies OrderStatus,
         item: item ? { _type: 'reference', _ref: item._id, _weak: true } : undefined,
-        itemTitle: item?.title ?? itemId,
+        itemTitle: item?.title ?? item?.venue ?? itemId,
         qty,
         stockReserved: false,
+        stockPath,
         createdAt: now(),
         ...extra,
         ...details,
       });
-      if (item && typeof item.stock === 'number') {
-        tx.patch(item._id, (p) => p.dec({ stock: qty }));
+      if (item && tracksStock) {
+        tx.patch(item._id, (p) => p.dec({ [stockPath]: qty }));
       }
       return tx.commit();
     });
@@ -371,7 +503,7 @@ export async function recordPaidOrder(
 export async function getStalePendingOrders(olderThan: Date, limit = 50): Promise<OrderDoc[]> {
   return sanityWrite.fetch(
     `*[_type == "order" && status == "pending" && createdAt < $cutoff] | order(createdAt asc)[0...$limit]{
-      _id, _rev, status, qty, stockReserved, item, createdAt, stripeSessionId
+      _id, _rev, status, qty, stockReserved, stockPath, item, createdAt, stripeSessionId
     }`,
     { cutoff: olderThan.toISOString(), limit },
   );

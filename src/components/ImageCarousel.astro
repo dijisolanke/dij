@@ -1,0 +1,112 @@
+---
+import CarouselControls from './CarouselControls.astro';
+import { urlFor, type SanityImage } from '../lib/sanity';
+
+/**
+ * Square, swipeable image carousel with Projects-style pagination dots.
+ * Used on shop cards (dots only, each image links to the item) and on the
+ * product page (dots + arrows).
+ */
+interface Props {
+  images: SanityImage[];
+  alt: string;
+  /** If set, every image links here (shop card). */
+  href?: string;
+  arrows?: boolean;
+  /** Load the first image eagerly (above the fold). */
+  eager?: boolean;
+  /** Rendered pixel widths for srcset. */
+  widths?: number[];
+  sizes?: string;
+}
+
+const {
+  images,
+  alt,
+  href,
+  arrows = false,
+  eager = false,
+  widths = [400, 600, 900],
+  sizes = '100vw',
+} = Astro.props;
+
+const count = images.length;
+const src = (image: SanityImage, w: number) => urlFor(image).width(w).height(w).fit('crop').auto('format').url();
+const mid = widths[Math.floor(widths.length / 2)];
+---
+
+<div class="image-carousel" data-slider data-slider-label="Image" role="group" aria-label={`${alt} images`}>
+  <div class="track" data-slider-track>
+    {images.map((image, i) => {
+      const img = (
+        <img
+          src={src(image, mid)}
+          srcset={widths.map((w) => `${src(image, w)} ${w}w`).join(', ')}
+          sizes={sizes}
+          alt={`${alt} — image ${i + 1} of ${count}`}
+          loading={eager && i === 0 ? 'eager' : 'lazy'}
+          decoding="async"
+          width={mid}
+          height={mid}
+          draggable="false"
+        />
+      );
+      return (
+        <div class="slide" data-slider-slide role="group" aria-roledescription="slide" aria-label={`${i + 1} of ${count}`}>
+          {href ? (
+            // Only the first image is in the tab order; the rest link to the same page.
+            <a href={href} tabindex={i === 0 ? undefined : -1}>{img}</a>
+          ) : (
+            img
+          )}
+        </div>
+      );
+    })}
+  </div>
+
+  {count > 1 && <CarouselControls count={count} label="image" arrows={arrows} />}
+</div>
+
+<script>
+  import { initSliders } from '../scripts/slider';
+  initSliders();
+</script>
+
+<style>
+  .image-carousel {
+    min-width: 0; /* never let the scrolling track widen its grid/flex parent */
+    width: 100%;
+  }
+
+  .track {
+    position: relative; /* slide.offsetLeft is measured from the track */
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    background: var(--color-surface);
+  }
+
+  .track::-webkit-scrollbar {
+    display: none;
+  }
+
+  .slide {
+    flex: 0 0 100%;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+
+  .slide a {
+    display: block;
+  }
+
+  img {
+    width: 100%;
+    height: auto; /* let aspect-ratio win over the width/height attributes */
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    user-select: none;
+  }
+</style>

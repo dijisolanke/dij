@@ -40,7 +40,12 @@ export function paymentDetails(session: Stripe.Checkout.Session): PaymentDetails
 /** Our checkout puts these on every session; used to recreate an order if it's missing. */
 function fallbackFrom(session: Stripe.Checkout.Session) {
   const qty = Number(session.metadata?.qty);
-  return { itemId: session.metadata?.itemId, qty: Number.isInteger(qty) && qty > 0 ? qty : 1 };
+  return {
+    itemId: session.metadata?.itemId,
+    qty: Number.isInteger(qty) && qty > 0 ? qty : 1,
+    stockPath: session.metadata?.stockPath,
+    kind: session.metadata?.kind,
+  };
 }
 
 export const isSettled = (session: Stripe.Checkout.Session) =>
@@ -67,7 +72,14 @@ export async function handleCompleted(session: Stripe.Checkout.Session) {
   if (!settled) return; // recorded once async_payment_succeeded arrives
   const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { limit: 1 });
   const qty = lineItems.data[0]?.quantity ?? 1;
-  await recordPaidOrder(session.id, itemId, qty, details);
+  await recordPaidOrder(
+    session.id,
+    itemId,
+    qty,
+    details,
+    { source: 'payment-link', ...(session.metadata?.kind ? { kind: session.metadata.kind } : {}) },
+    session.metadata?.stockPath, // set on ticket Payment Links, e.g. ticketTypes[_key=="abc"].stock
+  );
 }
 
 /**

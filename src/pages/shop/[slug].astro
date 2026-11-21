@@ -3,7 +3,7 @@ export const prerender = false;
 
 import { faArrowLeft } from '@fortawesome/free-solid-svg-icons';
 import Layout from '../../layouts/Layout.astro';
-import Gallery from '../../components/Gallery.astro';
+import ImageCarousel from '../../components/ImageCarousel.astro';
 import Icon from '../../components/Icon.astro';
 import { getShopItemBySlug, getSiteSettings, isSoldOut, type SiteSettings } from '../../lib/sanity';
 import { PUBLIC_TURNSTILE_SITE_KEY } from 'astro:env/client';
@@ -23,6 +23,10 @@ try {
 if (!loadError && !item) {
   return Astro.redirect('/#shop');
 }
+// Old ticket shop items: tickets now live on the gig (Live section).
+if (item?.type === 'digital-ticket') {
+  return Astro.redirect('/#live');
+}
 
 // TODO(stripe launch): see docs/stripe-launch-checklist.md before turning the shop on.
 const shopEnabled = settings?.shopEnabled ?? false;
@@ -40,7 +44,14 @@ const buyable = !!item && shopEnabled && !isSoldOut(item);
 
     {item && (
       <div class="detail">
-        <Gallery images={item.images} alt={item.title} />
+        <ImageCarousel
+          images={item.images}
+          alt={item.title}
+          arrows
+          eager
+          widths={[600, 900, 1200]}
+          sizes="(min-width: 800px) 60vw, 100vw"
+        />
 
         <div class="info">
           <h1>{item.title}</h1>
@@ -58,14 +69,15 @@ const buyable = !!item && shopEnabled && !isSoldOut(item);
             <p class="status">Sold out</p>
           ) : (
             <button
-              id="buy-button"
               class="button buy"
-              data-slug={item.slug.current}
+              data-buy
+              data-payload={JSON.stringify({ slug: item.slug.current })}
               data-sitekey={PUBLIC_TURNSTILE_SITE_KEY}
+              data-error="buy-error"
             >Buy</button>
           )}
           {/* Bot check: invisible unless Cloudflare needs the visitor to tick a box. */}
-          {buyable && <div id="turnstile" class="turnstile"></div>}
+          {buyable && <div class="turnstile" data-turnstile></div>}
           <p id="buy-error" class="buy-error" role="alert" hidden>Something went wrong — please try again.</p>
         </div>
       </div>
@@ -78,97 +90,8 @@ const buyable = !!item && shopEnabled && !isSoldOut(item);
 )}
 
 <script>
-  interface Turnstile {
-    render(el: HTMLElement, opts: Record<string, unknown>): string;
-    execute(el: HTMLElement): void;
-    reset(widgetId: string): void;
-  }
-  const getTurnstile = () => (window as unknown as { turnstile?: Turnstile }).turnstile;
-
-  const button = document.getElementById('buy-button');
-  const errorEl = document.getElementById('buy-error');
-  const container = document.getElementById('turnstile');
-
-  function waitForTurnstile(timeoutMs = 10_000): Promise<Turnstile> {
-    return new Promise((resolve, reject) => {
-      const started = Date.now();
-      const tick = () => {
-        const ts = getTurnstile();
-        if (ts) return resolve(ts);
-        if (Date.now() - started > timeoutMs) return reject(new Error('Turnstile failed to load'));
-        setTimeout(tick, 100);
-      };
-      tick();
-    });
-  }
-
-  // Tokens are single-use, so each Buy click runs a fresh (usually invisible) check.
-  let widgetId: string | undefined;
-  let pending: { resolve: (t: string) => void; reject: (e: Error) => void } | null = null;
-
-  async function getTurnstileToken(sitekey: string): Promise<string> {
-    const ts = await waitForTurnstile();
-    return new Promise((resolve, reject) => {
-      pending = { resolve, reject };
-      if (!widgetId) {
-        widgetId = ts.render(container!, {
-          sitekey,
-          action: 'checkout',
-          appearance: 'interaction-only',
-          execution: 'execute',
-          callback: (token: string) => pending?.resolve(token),
-          'error-callback': () => pending?.reject(new Error('Turnstile error')),
-          'expired-callback': () => pending?.reject(new Error('Turnstile expired')),
-        });
-      } else {
-        ts.reset(widgetId);
-      }
-      ts.execute(container!);
-    });
-  }
-
-  function resetButton() {
-    if (!button) return;
-    button.removeAttribute('disabled');
-    button.removeAttribute('aria-busy');
-    button.textContent = 'Buy';
-  }
-
-  button?.addEventListener('click', async () => {
-    const slug = button.getAttribute('data-slug');
-    const sitekey = button.getAttribute('data-sitekey') ?? '';
-    button.setAttribute('disabled', 'true');
-    button.setAttribute('aria-busy', 'true');
-    button.textContent = 'Checking…';
-    errorEl?.setAttribute('hidden', 'true');
-
-    try {
-      const turnstileToken = await getTurnstileToken(sitekey);
-      button.textContent = 'Redirecting…';
-      const res = await fetch('/api/create-checkout-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        // Quantity picker comes with the shop UI pass; fixed at 1 until then.
-        body: JSON.stringify({ slug, qty: 1, turnstileToken }),
-      });
-      const data = await res.json();
-      if (res.status === 409) {
-        // Someone else got the last one between page load and click.
-        button.textContent = 'Sold out';
-        button.removeAttribute('aria-busy');
-        return;
-      }
-      if (res.status === 503 && errorEl) {
-        // Ticket-drop rush: nothing was reserved, safe to click again.
-        errorEl.textContent = data.error;
-      }
-      if (!res.ok || !data.url) throw new Error(data.error || 'Checkout failed');
-      window.location.href = data.url;
-    } catch {
-      resetButton();
-      errorEl?.removeAttribute('hidden');
-    }
-  });
+  import { initBuyButtons } from '../../scripts/buy';
+  initBuyButtons();
 </script>
 
 <style>
@@ -246,7 +169,7 @@ const buyable = !!item && shopEnabled && !isSoldOut(item);
 
   @media (max-width: 800px) {
     .detail {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr); /* 1fr alone would grow to the carousel's full scroll width */
       gap: var(--space-3);
     }
 
