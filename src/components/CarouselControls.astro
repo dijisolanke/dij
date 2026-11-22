@@ -1,0 +1,142 @@
+---
+import { faChevronLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons';
+import Icon from './Icon.astro';
+
+/**
+ * Prev/next arrows + pagination dots for a [data-slider] (src/scripts/slider.ts).
+ * Visual style is copied 1:1 from the Projects carousel so they look identical.
+ */
+interface Props {
+  count: number;
+  /** Singular noun for screen readers, e.g. "image", "item". */
+  label: string;
+  /** Arrows either side of the dots (dots are always shown). */
+  arrows?: boolean;
+  /** Optional per-slide names for the dot labels. */
+  titles?: string[];
+  class?: string;
+}
+
+const { count, label, arrows = true, titles = [], class: className } = Astro.props;
+---
+
+<div class:list={['controls', { compact: !arrows }, className]}>
+  {arrows && (
+    <button type="button" class="arrow" data-slider-prev disabled>
+      <Icon icon={faChevronLeft} />
+      <span class="visually-hidden">Previous {label}</span>
+    </button>
+  )}
+
+  <div class="dots">
+    {Array.from({ length: count }, (_, i) => (
+      <button type="button" class="dot" data-slider-dot={i} aria-current={i === 0 ? 'true' : undefined}>
+        <span class="visually-hidden">
+          Show {label} {i + 1}{titles[i] ? `: ${titles[i]}` : ''}
+        </span>
+      </button>
+    ))}
+  </div>
+
+  {arrows && (
+    <button type="button" class="arrow" data-slider-next>
+      <Icon icon={faChevronRight} />
+      <span class="visually-hidden">Next {label}</span>
+    </button>
+  )}
+</div>
+<p class="visually-hidden" aria-live="polite" aria-atomic="true" data-slider-status></p>
+
+<style>
+  .controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+  }
+
+  /* Dots only (e.g. under a shop card): sit closer to the image. */
+  .controls.compact {
+    margin-top: var(--space-1);
+  }
+
+  .arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--tap);
+    height: var(--tap);
+    padding: 0;
+    border: 2px solid var(--color-text);
+    border-radius: 50%;
+    background: transparent;
+    color: var(--color-text);
+    font-size: 1rem;
+    cursor: pointer;
+    transition:
+      background-color 0.2s ease,
+      color 0.2s ease,
+      opacity 0.2s ease;
+  }
+
+  .arrow:hover:not(:disabled) {
+    background: var(--color-text);
+    color: var(--color-bg);
+  }
+
+  .arrow:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+
+  .dots {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  /* 44px tap target around a small visible dot. */
+  .dot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--tap);
+    height: var(--tap);
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+  }
+
+  .dot::before {
+    content: '';
+    width: 10px;
+    height: 10px;
+    border: 2px solid var(--color-text);
+    border-radius: 50%;
+    transition:
+      background-color 0.2s ease,
+      transform 0.2s ease;
+  }
+
+  .dot[aria-current='true']::before {
+    background: var(--color-text);
+    transform: scale(1.2);
+  }
+
+  .dot:hover::before {
+    background: var(--color-text-muted);
+  }
+
+  .dot[aria-current='true']:hover::before {
+    background: var(--color-text);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .dot::before,
+    .arrow {
+      transition: none;
+    }
+  }
+</style>

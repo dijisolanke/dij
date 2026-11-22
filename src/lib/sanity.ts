@@ -1,8 +1,9 @@
 import { createClient } from '@sanity/client';
-import imageUrlBuilder from '@sanity/image-url';
+import { createImageUrlBuilder } from '@sanity/image-url';
+import { PUBLIC_SANITY_PROJECT_ID, PUBLIC_SANITY_DATASET } from 'astro:env/client';
 
-const projectId = import.meta.env.PUBLIC_SANITY_PROJECT_ID;
-const dataset = import.meta.env.PUBLIC_SANITY_DATASET || 'production';
+const projectId = PUBLIC_SANITY_PROJECT_ID;
+const dataset = PUBLIC_SANITY_DATASET;
 
 export const sanity = createClient({
   projectId,
@@ -11,7 +12,7 @@ export const sanity = createClient({
   useCdn: true,
 });
 
-const builder = imageUrlBuilder(sanity);
+const builder = createImageUrlBuilder(sanity);
 
 export interface SanityImage {
   _type: string;
@@ -45,16 +46,39 @@ export interface SiteSettings {
   shopEnabled: boolean;
 }
 
+export interface TicketType {
+  _key: string;
+  name: string;
+  price: number;
+  /** Undefined/null = no limit. */
+  stock?: number | null;
+  maxPerOrder?: number;
+  description?: string;
+  soldOut?: boolean;
+}
+
 export interface Gig {
   _id: string;
   title?: string;
   date: string;
   venue: string;
   city: string;
+  /** Missing on older gigs = 'external'. */
+  ticketing?: 'none' | 'external' | 'onsite';
   ticketUrl?: string;
+  currency?: string;
+  ticketTypes?: TicketType[];
   soldOut?: boolean;
   notes?: string;
 }
+
+/** A ticket type that can't be bought right now. */
+export const isTicketTypeSoldOut = (t: Pick<TicketType, 'soldOut' | 'stock'>) =>
+  t.soldOut === true || (typeof t.stock === 'number' && t.stock <= 0);
+
+/** Every ticket type sold out (or the whole show marked sold out). */
+export const isGigSoldOut = (gig: Pick<Gig, 'soldOut' | 'ticketTypes'>) =>
+  gig.soldOut === true || (!!gig.ticketTypes?.length && gig.ticketTypes.every(isTicketTypeSoldOut));
 
 export interface ProjectLink {
   label: string;
@@ -80,7 +104,14 @@ export interface ShopItem {
   type: 'digital-ticket' | 'physical';
   images: SanityImage[];
   soldOut?: boolean;
+  /** Units left. Undefined/null = unlimited. */
+  stock?: number | null;
+  maxPerOrder?: number;
 }
+
+/** Manual "Sold out" switch, or tracked stock has run out. */
+export const isSoldOut = (item: Pick<ShopItem, 'soldOut' | 'stock'>) =>
+  item.soldOut === true || (typeof item.stock === 'number' && item.stock <= 0);
 
 export type WatchMedia =
   | (SanityImage & { _type: 'mediaImage' })
@@ -114,8 +145,13 @@ export async function getProjects(): Promise<Project[]> {
   return sanity.fetch(`*[_type == "project"] | order(coalesce(weight, 100) asc, _createdAt desc)`);
 }
 
+/** Merch only — tickets are sold from the gig in the Live section. */
 export async function getShopItems(): Promise<ShopItem[]> {
-  return sanity.fetch(`*[_type == "shopItem"] | order(_createdAt desc)`);
+  return sanity.fetch(`*[_type == "shopItem" && type != "digital-ticket"] | order(_createdAt desc)`);
+}
+
+export async function getGig(id: string): Promise<Gig | null> {
+  return sanity.fetch(`*[_type == "gig" && _id == $id][0]`, { id });
 }
 
 export async function getShopItemBySlug(slug: string): Promise<ShopItem | null> {

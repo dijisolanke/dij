@@ -22,9 +22,11 @@ function youtubeEmbed(url: string): ResolvedEmbed | null {
   const id = watch?.[1] || short?.[1] || shorts?.[1];
   if (!id) return null;
   return {
-    embedUrl: `https://www.youtube.com/embed/${id}`,
+    // youtube-nocookie.com: YouTube's privacy-enhanced mode — no tracking
+    // cookies until the visitor actually plays the video (UK PECR).
+    embedUrl: `https://www.youtube-nocookie.com/embed/${id}`,
     // loop only works on a single video when it's also passed as a playlist.
-    previewUrl: `https://www.youtube.com/embed/${id}?autoplay=1&mute=1&controls=0&loop=1&playlist=${id}&playsinline=1&rel=0&disablekb=1&iv_load_policy=3`,
+    previewUrl: `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&mute=1&controls=0&loop=1&playlist=${id}&playsinline=1&rel=0&disablekb=1&iv_load_policy=3`,
     thumbnailCandidates: [
       `https://img.youtube.com/vi/${id}/maxresdefault.jpg`,
       `https://img.youtube.com/vi/${id}/hqdefault.jpg`,
@@ -37,7 +39,8 @@ function vimeoEmbed(url: string): ResolvedEmbed | null {
   const match = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
   if (!match) return null;
   return {
-    embedUrl: `https://player.vimeo.com/video/${match[1]}`,
+    // dnt=1: Vimeo sets no tracking cookies / analytics for this player.
+    embedUrl: `https://player.vimeo.com/video/${match[1]}?dnt=1`,
     previewUrl: `https://player.vimeo.com/video/${match[1]}?autoplay=1&muted=1&controls=0&loop=1&dnt=1`,
     thumbnailCandidates: [FALLBACK_THUMBNAIL],
   };

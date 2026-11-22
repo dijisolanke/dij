@@ -35,17 +35,38 @@ export default defineType({
       name: 'currency',
       title: 'Currency',
       type: 'string',
-      initialValue: 'usd',
-      options: {list: ['usd', 'gbp', 'eur']},
+      initialValue: 'gbp',
+      options: {list: ['gbp', 'usd', 'eur']},
+    }),
+    defineField({
+      name: 'stock',
+      title: 'Stock',
+      type: 'number',
+      description:
+        'Units available. Leave empty for unlimited. Goes down automatically when someone starts checkout, and comes back if they abandon it (after 30 min).',
+      validation: (Rule) => Rule.integer().min(0),
+    }),
+    defineField({
+      name: 'maxPerOrder',
+      title: 'Max per order',
+      type: 'number',
+      initialValue: 4,
+      description: 'Most units one customer can buy in a single checkout.',
+      validation: (Rule) => Rule.integer().min(1).max(20),
     }),
     defineField({
       name: 'type',
       title: 'Item type',
       type: 'string',
-      options: {list: ['digital-ticket', 'physical']},
-      initialValue: 'digital-ticket',
+      options: {
+        list: [
+          {title: 'Physical merch (shipped)', value: 'physical'},
+          {title: 'Ticket (old — no longer sold in the shop)', value: 'digital-ticket'},
+        ],
+      },
+      initialValue: 'physical',
       description:
-        'digital-ticket = no shipping needed. physical = reserved for future merch drops that require shipping.',
+        'Show tickets are now set up on the Gig itself (Gig → Tickets → "Sold on this site"). Items marked "Ticket" are hidden from the shop.',
       validation: (Rule) => Rule.required(),
     }),
     defineField({

@@ -1,14 +1,175 @@
 ---
 export const prerender = false;
 
+import type Stripe from 'stripe';
 import Layout from '../../layouts/Layout.astro';
+import { stripe } from '../../lib/stripe/client';
+
+/**
+ * Order confirmation, shown after Stripe Checkout. Reads the session straight
+ * from Stripe (never trusts the URL beyond the session ID), so what's shown is
+ * exactly what was paid. Session IDs are long and unguessable; we still show
+ * only a masked email, and keep the page out of search engines and caches.
+ */
+
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+// The session ID is in the URL: never leak it to other sites via Referer.
+Astro.response.headers.set('Referrer-Policy', 'no-referrer');
+
+type State = 'paid' | 'processing' | 'unknown';
+
+const sessionId = Astro.url.searchParams.get('session_id') ?? '';
+let session: Stripe.Checkout.Session | null = null;
+
+if (/^cs_(test|live)_[A-Za-z0-9]{10,200}$/.test(sessionId)) {
+  try {
+    session = await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ['line_items.data.price.product'],
+    });
+  } catch {
+    session = null; // unknown/expired/other account → generic message below
+  }
+}
+
+const state: State =
+  session?.status === 'complete'
+    ? session.payment_status === 'paid' || session.payment_status === 'no_payment_required'
+      ? 'paid'
+      : 'processing'
+    : 'unknown';
+
+const isTicket = session?.metadata?.kind === 'ticket';
+const reference = session?.metadata?.orderId?.slice(0, 8).toUpperCase();
+
+const money = (minor: number | null | undefined) =>
+  minor == null || !session?.currency
+    ? ''
+    : new Intl.NumberFormat('en-GB', { style: 'currency', currency: session.currency.toUpperCase() }).format(
+        minor / 100,
+      );
+
+const lines = (session?.line_items?.data ?? []).map((line) => {
+  const product = line.price?.product as Stripe.Product | undefined;
+  return {
+    name: product?.name ?? line.description ?? 'Item',
+    detail: product?.description ?? undefined,
+    qty: line.quantity ?? 1,
+    total: money(line.amount_total),
+  };
+});
+
+/** j•••@example.com — enough for the buyer to recognise, not useful to anyone else. */
+function maskEmail(email?: string | null) {
+  if (!email) return undefined;
+  const [user, domain] = email.split('@');
+  if (!domain) return undefined;
+  return `${user.slice(0, 1)}${'•'.repeat(Math.max(2, Math.min(user.length - 1, 6)))}@${domain}`;
+}
+const email = maskEmail(session?.customer_details?.email);
+const shipping = session?.collected_information?.shipping_details?.address;
+const countryName = (code?: string | null) => {
+  if (!code) return undefined;
+  try {
+    return new Intl.DisplayNames(['en-GB'], { type: 'region' }).of(code) ?? code;
+  } catch {
+    return code;
+  }
+};
+const shipTo = shipping ? [shipping.city, countryName(shipping.country)].filter(Boolean).join(', ') : undefined;
+
+const backHref = isTicket ? '/#live' : '/#shop';
+const backLabel = isTicket ? 'Back to live dates' : 'Back to shop';
 ---
 
-<Layout title="Thank you" description="Order confirmed">
-  <main id="main" class="container page">
-    <h1>Thank you</h1>
-    <p>Your purchase is confirmed. A receipt has been sent to your email.</p>
-    <a href="/" class="button">Back to home</a>
+<Layout
+  title={state === 'unknown' ? 'Order not found' : 'Thank you'}
+  description="Order confirmation"
+  noindex
+>
+  <main id="main" class="container narrow page">
+    {state === 'unknown' ? (
+      <>
+        <h1>We couldn't find that order</h1>
+        <p class="lead">
+          If you've just paid, check your email for your order confirmation — your order is safe. If something looks
+          wrong, get in touch and we'll sort it out.
+        </p>
+        <a href="/" class="button">Back to home</a>
+      </>
+    ) : (
+      <>
+        <p class="eyebrow">{state === 'paid' ? (isTicket ? 'Tickets confirmed' : 'Order confirmed') : 'Payment processing'}</p>
+        <h1>Thank you</h1>
+
+        {state === 'processing' ? (
+          <p class="lead">
+            Your payment is being processed by your bank. We'll email {email ?? 'you'} as soon as it's confirmed — you
+            don't need to do anything else.
+          </p>
+        ) : isTicket ? (
+          <p class="lead">
+            You're on the door list. Bring your confirmation email (or the card you paid with) and we'll check you in
+            at the door.
+          </p>
+        ) : (
+          <p class="lead">
+            Your order is in. A confirmation is on its way{email ? ` to ${email}` : ''}, and we'll email again when your
+            order ships.
+          </p>
+        )}
+
+        {lines.length > 0 && (
+          <section class="summary" aria-labelledby="summary-title">
+            <h2 id="summary-title" class="visually-hidden">Order summary</h2>
+            <ul class="lines">
+              {lines.map((line) => (
+                <li class="line">
+                  <div class="line-main">
+                    <span class="line-name">{line.name}</span>
+                    {line.detail && <span class="line-detail">{line.detail}</span>}
+                  </div>
+                  <span class="line-qty">× {line.qty}</span>
+                  <span class="line-total">{line.total}</span>
+                </li>
+              ))}
+            </ul>
+            <dl class="totals">
+              {session?.total_details?.amount_shipping ? (
+                <>
+                  <dt>Shipping</dt>
+                  <dd>{money(session.total_details.amount_shipping)}</dd>
+                </>
+              ) : null}
+              <dt class="grand">Total paid</dt>
+              <dd class="grand">{money(session?.amount_total)}</dd>
+            </dl>
+            <dl class="meta">
+              {reference && (
+                <>
+                  <dt>Order reference</dt>
+                  <dd>{reference}</dd>
+                </>
+              )}
+              {email && (
+                <>
+                  <dt>Confirmation sent to</dt>
+                  <dd>{email}</dd>
+                </>
+              )}
+              {shipTo && (
+                <>
+                  <dt>Shipping to</dt>
+                  <dd>{shipTo}</dd>
+                </>
+              )}
+            </dl>
+          </section>
+        )}
+
+        <p class="note">Keep your order reference handy if you need to contact us about this order.</p>
+        <a href={backHref} class="button">{backLabel}</a>
+      </>
+    )}
   </main>
 </Layout>
 
@@ -16,6 +177,109 @@ import Layout from '../../layouts/Layout.astro';
   .page {
     padding-top: var(--space-5);
     padding-bottom: var(--space-6);
-    text-align: center;
+  }
+
+  .eyebrow {
+    font-weight: 700;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--color-text-muted);
+  }
+
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: clamp(2.25rem, 8vw, 3.5rem);
+    text-transform: uppercase;
+    line-height: 1.05;
+    margin-top: var(--space-1);
+  }
+
+  .lead {
+    margin-top: var(--space-2);
+    max-width: 50ch;
+    font-size: 1.05rem;
+  }
+
+  .summary {
+    margin-top: var(--space-4);
+    border-top: 1px solid var(--color-border, rgba(255, 255, 255, 0.2));
+  }
+
+  .lines {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .line {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: var(--space-2);
+    align-items: baseline;
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--color-border, rgba(255, 255, 255, 0.2));
+  }
+
+  .line-main {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+  }
+
+  .line-name {
+    font-weight: 900;
+    text-transform: uppercase;
+  }
+
+  .line-detail {
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+  }
+
+  .line-qty {
+    color: var(--color-text-muted);
+  }
+
+  .line-total {
+    font-weight: 700;
+  }
+
+  .totals,
+  .meta {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.5rem var(--space-2);
+    margin: var(--space-2) 0 0;
+  }
+
+  .totals dd,
+  .meta dd {
+    margin: 0;
+    text-align: right;
+  }
+
+  .totals .grand {
+    font-weight: 900;
+    font-size: 1.15rem;
+  }
+
+  .meta {
+    margin-top: var(--space-3);
+    color: var(--color-text-muted);
+    font-size: 0.95rem;
+  }
+
+  .meta dd {
+    color: var(--color-text);
+    overflow-wrap: anywhere;
+  }
+
+  .note {
+    margin: var(--space-4) 0 var(--space-3);
+    font-size: 0.9rem;
+    color: var(--color-text-muted);
   }
 </style>

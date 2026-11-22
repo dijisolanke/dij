@@ -1,0 +1,338 @@
+---
+export const prerender = false;
+
+import { faArrowLeft, faMinus, faPlus } from '@fortawesome/free-solid-svg-icons';
+import Layout from '../../layouts/Layout.astro';
+import Icon from '../../components/Icon.astro';
+import { getGig, getSiteSettings, isGigSoldOut, isTicketTypeSoldOut, type Gig, type SiteSettings } from '../../lib/sanity';
+import { PUBLIC_TURNSTILE_SITE_KEY } from 'astro:env/client';
+import { TICKET_REFUND_DAYS } from '../../lib/company';
+
+const { gigId } = Astro.params;
+
+let gig: Gig | null = null;
+let settings: SiteSettings | undefined;
+let loadError = false;
+try {
+  [gig, settings] = await Promise.all([getGig(gigId!), getSiteSettings()]);
+} catch {
+  loadError = true;
+}
+
+// Only shows you sell tickets for on this site have a ticket page.
+if (!loadError && (!gig || gig.ticketing !== 'onsite')) {
+  return Astro.redirect('/#live');
+}
+
+const finished = !!gig && new Date(gig.date).getTime() <= Date.now();
+const wholeShowSoldOut = !!gig && isGigSoldOut(gig);
+const types = gig?.ticketTypes ?? [];
+const anyBuyable = !!gig && !finished && !gig.soldOut && types.some((t) => !isTicketTypeSoldOut(t));
+
+const eventName = gig ? gig.title || gig.venue : 'Tickets';
+const when = gig
+  ? new Date(gig.date).toLocaleString('en-GB', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'Europe/London',
+    })
+  : '';
+const money = (amount: number) =>
+  new Intl.NumberFormat('en-GB', { style: 'currency', currency: (gig?.currency || 'gbp').toUpperCase() }).format(amount);
+const LOW_STOCK = 10;
+---
+
+<Layout title={`Tickets — ${eventName}`} description={gig ? `${when} · ${gig.venue}, ${gig.city}` : undefined} settings={settings}>
+  <main id="main" class="container narrow page">
+    <a href="/#live" class="back-link">
+      <Icon icon={faArrowLeft} />
+      Back to live
+    </a>
+
+    {loadError && <p class="empty">Couldn't load tickets right now. Please check back shortly.</p>}
+
+    {gig && (
+      <>
+        <header class="event">
+          <h1>{eventName}</h1>
+          <p class="event-when"><time datetime={gig.date}>{when}</time></p>
+          <p class="event-where">{gig.venue}, {gig.city}</p>
+          {gig.notes && <p class="event-notes">{gig.notes}</p>}
+        </header>
+
+        {finished ? (
+          <p class="status">This show has finished — ticket sales are closed.</p>
+        ) : wholeShowSoldOut && gig.soldOut ? (
+          <p class="status">Sold out</p>
+        ) : (
+          <ul class="tickets">
+            {types.map((type) => {
+              const soldOut = isTicketTypeSoldOut(type);
+              const max = Math.max(1, Math.min(type.maxPerOrder ?? 6, typeof type.stock === 'number' ? type.stock : Infinity));
+              const qtyId = `qty-${type._key}`;
+              const errorId = `error-${type._key}`;
+              return (
+                <li class:list={['ticket', { 'is-sold-out': soldOut }]}>
+                  <div class="ticket-info">
+                    <h2 class="ticket-name">{type.name}</h2>
+                    {type.description && <p class="ticket-desc">{type.description}</p>}
+                    <p class="ticket-price">{money(type.price)}</p>
+                    {!soldOut && typeof type.stock === 'number' && type.stock <= LOW_STOCK && (
+                      <p class="ticket-low">Only {type.stock} left</p>
+                    )}
+                  </div>
+
+                  {soldOut ? (
+                    <p class="status small">Sold out</p>
+                  ) : (
+                    <div class="ticket-buy">
+                      {max > 1 && (
+                        <div class="qty" data-qty>
+                          <button type="button" class="qty-btn" data-qty-dec>
+                            <Icon icon={faMinus} />
+                            <span class="visually-hidden">Fewer {type.name} tickets</span>
+                          </button>
+                          <label class="visually-hidden" for={qtyId}>Number of {type.name} tickets</label>
+                          <input id={qtyId} class="qty-value" type="number" inputmode="numeric" min="1" max={max} value="1" data-qty-value />
+                          <button type="button" class="qty-btn" data-qty-inc>
+                            <Icon icon={faPlus} />
+                            <span class="visually-hidden">More {type.name} tickets</span>
+                          </button>
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        class="button buy"
+                        data-buy
+                        data-payload={JSON.stringify({ gigId: gig._id, ticketKey: type._key })}
+                        data-sitekey={PUBLIC_TURNSTILE_SITE_KEY}
+                        data-qty-input={max > 1 ? qtyId : undefined}
+                        data-error={errorId}
+                      >Buy</button>
+                    </div>
+                  )}
+                  <p id={errorId} class="buy-error" role="alert" hidden></p>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        {/* Bot check: invisible unless Cloudflare needs the visitor to tick a box. */}
+        {anyBuyable && <div class="turnstile" data-turnstile></div>}
+        {anyBuyable && (
+          // Key terms must be shown before purchase, incl. that there's no 14-day cancellation right.
+          <p class="small-print">
+            Your name goes on the door list. Bring your confirmation email or the card you paid with. Full refund if
+            you ask at least {TICKET_REFUND_DAYS} days before the show; after that tickets can't be refunded (the 14-day
+            right to cancel doesn't apply to event tickets). Age limits and entry rules are on the listing. By buying
+            you agree to our <a href="/legal/terms">terms of sale</a>.
+          </p>
+        )}
+      </>
+    )}
+  </main>
+</Layout>
+
+{anyBuyable && (
+  <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
+)}
+
+<script>
+  import { initBuyButtons } from '../../scripts/buy';
+  initBuyButtons();
+</script>
+
+<style>
+  .page {
+    padding-top: var(--space-3);
+    padding-bottom: var(--space-6);
+  }
+
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: var(--tap);
+    margin-bottom: var(--space-3);
+    font-weight: 700;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    text-decoration: none;
+  }
+
+  .back-link:hover {
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
+
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: clamp(2rem, 6vw, 3rem);
+    text-transform: uppercase;
+    line-height: 1.05;
+  }
+
+  .event {
+    margin-bottom: var(--space-4);
+  }
+
+  .event-when {
+    font-weight: 700;
+    font-size: 1.1rem;
+    margin-top: var(--space-1);
+  }
+
+  .event-where,
+  .event-notes {
+    color: var(--color-text-muted);
+  }
+
+  .tickets {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-top: 1px solid var(--color-border, rgba(255, 255, 255, 0.2));
+  }
+
+  .ticket {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2);
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--color-border, rgba(255, 255, 255, 0.2));
+  }
+
+  @media (min-width: 640px) {
+    .ticket {
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+    }
+
+    .buy-error {
+      grid-column: 1 / -1;
+    }
+  }
+
+  .ticket.is-sold-out .ticket-info {
+    opacity: 0.5;
+  }
+
+  .ticket-name {
+    font-weight: 900;
+    font-size: 1.25rem;
+    text-transform: uppercase;
+  }
+
+  .ticket-desc {
+    color: var(--color-text-muted);
+  }
+
+  .ticket-price {
+    font-weight: 700;
+    font-size: 1.1rem;
+    margin-top: 0.25rem;
+  }
+
+  .ticket-low {
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-top: 0.25rem;
+  }
+
+  .ticket-buy {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .ticket-buy .buy {
+    flex: 1;
+    min-width: 8rem;
+  }
+
+  .qty {
+    display: inline-flex;
+    align-items: center;
+    border: 2px solid var(--color-text);
+  }
+
+  .qty-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--tap);
+    height: var(--tap);
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--color-text);
+    cursor: pointer;
+  }
+
+  .qty-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+
+  .qty-value {
+    width: 2.5rem;
+    height: var(--tap);
+    border: 0;
+    background: transparent;
+    color: var(--color-text);
+    font: inherit;
+    font-weight: 700;
+    text-align: center;
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
+  .qty-value::-webkit-inner-spin-button,
+  .qty-value::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  .status {
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-text-muted);
+  }
+
+  .status.small {
+    font-size: 0.9rem;
+  }
+
+  .buy-error {
+    color: var(--color-text-muted);
+  }
+
+  .turnstile {
+    margin-top: var(--space-2);
+  }
+
+  .turnstile:empty {
+    display: none;
+  }
+
+  .small-print {
+    margin-top: var(--space-3);
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+  }
+
+  .small-print a {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+</style>

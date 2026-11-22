@@ -3,9 +3,10 @@ export const prerender = false;
 
 import { faArrowLeft } from '@fortawesome/free-solid-svg-icons';
 import Layout from '../../layouts/Layout.astro';
-import Gallery from '../../components/Gallery.astro';
+import ImageCarousel from '../../components/ImageCarousel.astro';
 import Icon from '../../components/Icon.astro';
-import { getShopItemBySlug, getSiteSettings, type SiteSettings } from '../../lib/sanity';
+import { getShopItemBySlug, getSiteSettings, isSoldOut, type SiteSettings } from '../../lib/sanity';
+import { PUBLIC_TURNSTILE_SITE_KEY } from 'astro:env/client';
 
 const { slug } = Astro.params;
 
@@ -22,9 +23,14 @@ try {
 if (!loadError && !item) {
   return Astro.redirect('/#shop');
 }
+// Old ticket shop items: tickets now live on the gig (Live section).
+if (item?.type === 'digital-ticket') {
+  return Astro.redirect('/#live');
+}
 
 // TODO(stripe launch): see docs/stripe-launch-checklist.md before turning the shop on.
 const shopEnabled = settings?.shopEnabled ?? false;
+const buyable = !!item && shopEnabled && !isSoldOut(item);
 ---
 
 <Layout title={item ? item.title : 'Shop'} description={item?.description} settings={settings}>
@@ -38,24 +44,46 @@ const shopEnabled = settings?.shopEnabled ?? false;
 
     {item && (
       <div class="detail">
-        <Gallery images={item.images} alt={item.title} />
+        <ImageCarousel
+          images={item.images}
+          alt={item.title}
+          arrows
+          eager
+          widths={[600, 900, 1200]}
+          sizes="(min-width: 800px) 60vw, 100vw"
+        />
 
         <div class="info">
           <h1>{item.title}</h1>
           <p class="price">
             {new Intl.NumberFormat(undefined, {
               style: 'currency',
-              currency: item.currency || 'USD',
+              currency: item.currency || 'GBP',
             }).format(item.price)}
           </p>
           {item.description && <p class="description">{item.description}</p>}
 
           {!shopEnabled ? (
             <p class="status">Coming soon</p>
-          ) : item.soldOut ? (
+          ) : isSoldOut(item) ? (
             <p class="status">Sold out</p>
           ) : (
-            <button id="buy-button" class="button buy" data-slug={item.slug.current}>Buy</button>
+            <button
+              class="button buy"
+              data-buy
+              data-payload={JSON.stringify({ slug: item.slug.current })}
+              data-sitekey={PUBLIC_TURNSTILE_SITE_KEY}
+              data-error="buy-error"
+            >Buy</button>
+          )}
+          {/* Bot check: invisible unless Cloudflare needs the visitor to tick a box. */}
+          {buyable && <div class="turnstile" data-turnstile></div>}
+          {buyable && (
+            // Key terms must be shown before purchase (Consumer Contracts Regs 2013).
+            <p class="terms-note">
+              Price includes delivery. 14-day returns — you pay return postage. Orders outside the UK may have import
+              duties on arrival. By buying you agree to our <a href="/legal/terms">terms of sale</a>.
+            </p>
           )}
           <p id="buy-error" class="buy-error" role="alert" hidden>Something went wrong — please try again.</p>
         </div>
@@ -64,33 +92,13 @@ const shopEnabled = settings?.shopEnabled ?? false;
   </main>
 </Layout>
 
+{buyable && (
+  <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
+)}
+
 <script>
-  const button = document.getElementById('buy-button');
-  const errorEl = document.getElementById('buy-error');
-
-  button?.addEventListener('click', async () => {
-    const slug = button.getAttribute('data-slug');
-    button.setAttribute('disabled', 'true');
-    button.setAttribute('aria-busy', 'true');
-    button.textContent = 'Redirecting…';
-    errorEl?.setAttribute('hidden', 'true');
-
-    try {
-      const res = await fetch('/api/create-checkout-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.url) throw new Error(data.error || 'Checkout failed');
-      window.location.href = data.url;
-    } catch {
-      button.removeAttribute('disabled');
-      button.removeAttribute('aria-busy');
-      button.textContent = 'Buy';
-      errorEl?.removeAttribute('hidden');
-    }
-  });
+  import { initBuyButtons } from '../../scripts/buy';
+  initBuyButtons();
 </script>
 
 <style>
@@ -153,6 +161,26 @@ const shopEnabled = settings?.shopEnabled ?? false;
     color: var(--color-text-muted);
   }
 
+  .turnstile {
+    margin-top: var(--space-2);
+  }
+
+  .turnstile:empty {
+    display: none;
+  }
+
+  .terms-note {
+    margin-top: var(--space-2);
+    max-width: 45ch;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+  }
+
+  .terms-note a {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
   .buy-error {
     color: var(--color-text-muted);
     margin-top: var(--space-2);
@@ -160,7 +188,7 @@ const shopEnabled = settings?.shopEnabled ?? false;
 
   @media (max-width: 800px) {
     .detail {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr); /* 1fr alone would grow to the carousel's full scroll width */
       gap: var(--space-3);
     }
 

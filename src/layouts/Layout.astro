@@ -12,9 +12,11 @@ interface Props {
   settings?: SiteSettings;
   /** Landing page only: header floats over the hero. */
   overHero?: boolean;
+  /** Keep this page out of search engines (e.g. order confirmations). */
+  noindex?: boolean;
 }
 
-const { title, description = '', overHero = false } = Astro.props;
+const { title, description = '', overHero = false, noindex = false } = Astro.props;
 
 let settings = Astro.props.settings;
 if (!settings) {
@@ -38,6 +40,7 @@ const socialLinks = settings?.socialLinks || [];
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="description" content={description} />
     <title>{title}</title>
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

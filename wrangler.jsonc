@@ -1,0 +1,33 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"compatibility_date": "2026-11-10",
+	"compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+	"name": "dij",
+	// Custom entry: Astro for web requests + `scheduled` for the cleanup cron.
+	"main": "./src/worker.ts",
+	// Every 15 min: release stock held by orders stuck in "pending" > 2h
+	// (checks Stripe first, so paid orders are recorded, never released).
+	"triggers": {
+		"crons": ["*/15 * * * *"]
+	},
+	"assets": {
+		"directory": "./dist",
+		"binding": "ASSETS"
+	},
+	// Don't let deploys wipe plain-text variables added in the Cloudflare dashboard
+	// (secrets are always kept; this protects "Text" ones too).
+	"keep_vars": true,
+	"observability": {
+		"enabled": true
+	},
+	// Two Workers from one repo (like Vercel's per-branch deployments):
+	//   dij      ← main branch: live Stripe keys, production dataset, real domain
+	//   dij-dev  ← dev branch:  test Stripe keys, development dataset, workers.dev URL
+	// Each Worker has its own variables/secrets in the Cloudflare dashboard.
+	// The dev Worker builds with `npm run build:dev` (sets CLOUDFLARE_ENV=dev).
+	"env": {
+		"dev": {
+			"name": "dij-dev"
+		}
+	}
+}

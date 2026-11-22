@@ -1,0 +1,141 @@
+---
+import LegalPage from '../../components/LegalPage.astro';
+import { COMPANY, TICKET_REFUND_DAYS } from '../../lib/company';
+
+const mail = `mailto:${COMPANY.email}`;
+---
+
+<LegalPage title="Terms of sale" description={`Terms for buying merch and tickets from ${COMPANY.registeredName}.`}>
+  <p>
+    These terms apply when you buy merch or tickets on this website. Please read them before you buy — by placing an
+    order you agree to them. They don't affect your statutory rights as a consumer.
+  </p>
+
+  <h2>Who we are</h2>
+  <p>
+    This website is run by <strong>{COMPANY.registeredName}</strong>, a company registered in {COMPANY.registeredIn}{" "}
+    (company number {COMPANY.registeredNumber}). Registered office: {COMPANY.registeredOffice}. Email:{" "}
+    <a href={mail}>{COMPANY.email}</a>.
+  </p>
+
+  <h2>Prices and payment</h2>
+  <ul>
+    <li>Prices are shown in pounds sterling (or the currency shown next to the price) and are the total you pay.</li>
+    <li>
+      {COMPANY.registeredName} is not registered for VAT, so no VAT is charged.
+    </li>
+    <li>Merch prices include delivery. Ticket prices include all fees — there's nothing added at checkout.</li>
+    <li>
+      Payments are processed securely by Stripe. We never see or store your full card details. Your order is
+      confirmed when payment succeeds and you see the confirmation page.
+    </li>
+    <li>
+      If we make an obvious pricing mistake, we'll contact you and you can choose to go ahead at the correct price or
+      get a full refund.
+    </li>
+  </ul>
+
+  <h2>Merch</h2>
+
+  <h3>Delivery</h3>
+  <ul>
+    <li>We ship to the countries offered at checkout. We'll dispatch your order within 30 days.</li>
+    <li>
+      <strong>Orders outside the UK:</strong> your country may charge import duties, taxes or handling fees when the
+      parcel arrives. These are set by your country, aren't included in our prices, and are your responsibility.
+    </li>
+    <li>If your order hasn't arrived within a reasonable time, email us and we'll help.</li>
+  </ul>
+
+  <h3>Changing your mind (14 days)</h3>
+  <ul>
+    <li>
+      You can cancel your merch order for any reason within <strong>14 days of the day you receive it</strong>. Tell
+      us by email at <a href={mail}>{COMPANY.email}</a> with your order reference.
+    </li>
+    <li>
+      You then have a further <strong>14 days</strong> to send the item back. <strong>You pay the return postage</strong>,
+      and we recommend a tracked service, as the item is your responsibility until it reaches us.
+    </li>
+    <li>
+      We'll refund the price you paid (including the original delivery, which is built into the price) within 14 days
+      of receiving the item back, or of you showing proof you posted it — whichever is sooner — to your original
+      payment method.
+    </li>
+    <li>
+      Items should come back unused and in the condition you received them. If an item has been handled more than
+      needed to check it (for example worn or washed), we may reduce the refund to reflect the loss in value.
+    </li>
+  </ul>
+
+  <h3>Faulty or wrong items</h3>
+  <p>
+    If something arrives faulty, damaged or not as described, email us. Under the Consumer Rights Act 2015 you can
+    reject it for a full refund within 30 days of delivery; after that you're entitled to a repair or replacement,
+    and a refund if that doesn't fix it. For faulty or wrong items, we cover the cost of returning them.
+  </p>
+
+  <h2>Tickets for our shows</h2>
+  <p>These terms only apply to tickets for shows we run and sell tickets for on this website.</p>
+
+  <h3>Your ticket</h3>
+  <ul>
+    <li>
+      When your payment succeeds, your name goes on the door list for that show. Bring your confirmation email (or the
+      card you paid with) and we'll check you in at the door.
+    </li>
+    <li>
+      Age limits and entry requirements vary by show and are shown on the listing. You may be asked for ID. If you
+      don't meet a show's entry requirements, you may be refused entry and won't be entitled to a refund.
+    </li>
+  </ul>
+
+  <h3>Refunds if you can't come</h3>
+  <ul>
+    <li>
+      Because tickets are for an event on a specific date, the usual 14-day right to cancel online purchases 
+      <strong> does not apply to tickets</strong>.
+    </li>
+    <li>
+      Instead, you can get a <strong>full refund if you ask at least {TICKET_REFUND_DAYS} days before the show</strong>.
+      Email <a href={mail}>{COMPANY.email}</a> with your order reference. Refunds go back to your original payment
+      method.
+    </li>
+    <li>Less than {TICKET_REFUND_DAYS} days before the show, tickets can't be refunded.</li>
+  </ul>
+
+  <h3>If we cancel or move a show</h3>
+  <ul>
+    <li>
+      If we cancel a show, you can choose either a <strong>full refund</strong> or to use your ticket for the
+      <strong> next show we run in the same city</strong>. We'll email you to ask which you'd prefer.
+    </li>
+    <li>
+      If we move a show to a new date, your ticket is valid for the new date. If you can't make the new date, you can
+      ask for a full refund.
+    </li>
+  </ul>
+
+  <h3>Tickets for other promoters' shows</h3>
+  <p>
+    Some listings link to another company's ticket site. Those tickets are sold by that company under its own terms,
+    not by us.
+  </p>
+
+  <h2>Our responsibility to you</h2>
+  <p>
+    We're responsible for loss or damage you suffer that's a foreseeable result of us breaking these terms or failing
+    to use reasonable care and skill. We're not responsible for loss that isn't foreseeable, or for events outside our
+    reasonable control. Nothing in these terms limits our liability where it would be unlawful to do so, including
+    for death or personal injury caused by our negligence, or for fraud.
+  </p>
+
+  <h2>Questions and complaints</h2>
+  <p>
+    Email <a href={mail}>{COMPANY.email}</a> and we'll get back to you as soon as we can. These terms are governed by
+    the law of {COMPANY.registeredIn}. If you live elsewhere in the UK, you can also bring proceedings in your local
+    courts.
+  </p>
+
+  <p>See also our <a href="/legal/privacy">privacy policy</a>.</p>
+</LegalPage>

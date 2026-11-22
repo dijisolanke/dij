@@ -6,6 +6,8 @@ import Layout from '../layouts/Layout.astro';
 import Icon from '../components/Icon.astro';
 import VideoCard from '../components/VideoCard.astro';
 import ProjectCarousel from '../components/ProjectCarousel.astro';
+import ImageCarousel from '../components/ImageCarousel.astro';
+import CarouselControls from '../components/CarouselControls.astro';
 import SocialLinks from '../components/SocialLinks.astro';
 import {
   getAbout,
@@ -14,6 +16,8 @@ import {
   getSiteSettings,
   getUpcomingGigs,
   getWatchEntries,
+  isGigSoldOut,
+  isSoldOut,
   urlFor,
   type SiteSettings,
 } from '../lib/sanity';
@@ -45,7 +49,7 @@ const heroCta = about?.heroCta?.label && about.heroCta.url ? about.heroCta : nul
 
 const soundcloudEmbed = settings.soundcloudUrl
   ? `https://w.soundcloud.com/player/?url=${encodeURIComponent(settings.soundcloudUrl)}` +
-    '&color=%23111111&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false'
+    '&color=%23111111&auto_play=true&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false'
   : null;
 
 const isUrl = (value?: string) => !!value && /^https?:\/\//i.test(value.trim());
@@ -110,19 +114,18 @@ const description = about?.bio?.split(/\n\s*\n/)[0] || `${artistName} — music,
       </div>
     </section>
 
-    <!-- ================= Music ================= -->
+    <!-- ================= Music. ================= -->
     <section id="music" class="section" aria-labelledby="music-title">
       <div class="container narrow" data-reveal-on-scroll>
         <h2 id="music-title" class="section-title">Music Archive</h2>
         {soundcloudEmbed ? (
           <>
-            <iframe
-              class="soundcloud"
-              src={soundcloudEmbed}
-              title={`${artistName} on SoundCloud`}
-              loading="lazy"
-              allow="autoplay"
-            ></iframe>
+            {/* Click-to-load: SoundCloud sets its own cookies, so the player only loads once the visitor asks for it (UK PECR). */}
+            <div class="soundcloud soundcloud-facade" data-soundcloud data-src={soundcloudEmbed} data-title={`${artistName} on SoundCloud`}>
+              <button type="button" class="button" data-soundcloud-load>Load SoundCloud player</button>
+              <p class="soundcloud-note">This loads a player from SoundCloud, which may set its own cookies.</p>
+              <a class="soundcloud-more" href="/legal/privacy#cookies">More about cookies</a>
+            </div>
             <p class="music-link">
               <a href={settings.soundcloudUrl} target="_blank" rel="noopener noreferrer">
                 Listen on SoundCloud<span class="visually-hidden"> (opens in a new tab)</span>
@@ -160,7 +163,11 @@ const description = about?.bio?.split(/\n\s*\n/)[0] || `${artistName} — music,
           <ul class="gigs">
             {gigs.map((gig) => {
               const date = formatGigDate(gig.date);
-              const ticketUrl = gig.ticketUrl || (isUrl(gig.notes) ? gig.notes : undefined);
+              // Older gigs have no "ticketing" value: they behave as external links.
+              const ticketing = gig.ticketing ?? 'external';
+              const ticketUrl =
+                ticketing === 'external' ? gig.ticketUrl || (isUrl(gig.notes) ? gig.notes : undefined) : undefined;
+              const soldOut = ticketing === 'onsite' ? isGigSoldOut(gig) : gig.soldOut;
               return (
                 <li class="gig">
                   <time class="gig-date" datetime={gig.date}>{date}</time>
@@ -171,8 +178,14 @@ const description = about?.bio?.split(/\n\s*\n/)[0] || `${artistName} — music,
                     {gig.notes && !isUrl(gig.notes) && <span class="gig-notes">{gig.notes}</span>}
                   </div>
                   <div class="gig-action">
-                    {gig.soldOut ? (
+                    {ticketing === 'none' ? null : soldOut ? (
                       <span class="sold-out">Sold out</span>
+                    ) : ticketing === 'onsite' ? (
+                      // Your own show: tickets are bought on this site.
+                      <a href={`/tickets/${gig._id}`} class="button">
+                        Tickets
+                        <span class="visually-hidden">for {gig.venue}, {date}</span>
+                      </a>
                     ) : (
                       ticketUrl && (
                         <a href={ticketUrl} class="button" target="_blank" rel="noopener noreferrer">
@@ -215,30 +228,38 @@ const description = about?.bio?.split(/\n\s*\n/)[0] || `${artistName} — music,
         ) : shopItems.length === 0 ? (
           <p class="coming-soon">Coming soon</p>
         ) : (
-          <ul class="shop-grid">
-            {shopItems.map((item) => (
-              <li>
-                <a href={`/shop/${item.slug.current}`} class="shop-card">
-                  <div class="shop-image">
-                    <img
-                      src={urlFor(item.images[0]).width(600).height(600).fit('crop').auto('format').url()}
-                      srcset={[400, 600, 900]
-                        .map((w) => `${urlFor(item.images[0]).width(w).height(w).fit('crop').auto('format').url()} ${w}w`)
-                        .join(', ')}
-                      sizes="(min-width: 1080px) 340px, (min-width: 640px) 33vw, 100vw"
-                      alt=""
-                      loading="lazy"
-                      decoding="async"
-                      width="600"
-                      height="600"
-                    />
-                  </div>
-                  <span class="shop-title">{item.title}</span>
-                  <span class="shop-price">{item.soldOut ? 'Sold out' : formatPrice(item.price, item.currency)}</span>
-                </a>
-              </li>
-            ))}
-          </ul>
+          // Phones: one item at a time, swipeable, with Projects-style arrows + dots.
+          // Tablet/desktop: a 2–3 column grid (controls hidden).
+          <div class="shop-slider" data-slider data-slider-label="Item">
+            <ul class="shop-grid" data-slider-track>
+              {shopItems.map((item) => {
+                const href = `/shop/${item.slug.current}`;
+                return (
+                  <li class="shop-slide" data-slider-slide data-title={item.title}>
+                    <article class="shop-card">
+                      <ImageCarousel
+                        images={item.images}
+                        alt={item.title}
+                        href={href}
+                        sizes="(min-width: 1080px) 340px, (min-width: 900px) 33vw, (min-width: 640px) 50vw, 100vw"
+                      />
+                      <a href={href} class="shop-card-link">
+                        <span class="shop-title">{item.title}</span>
+                        <span class="shop-price">
+                          {isSoldOut(item) ? 'Sold out' : formatPrice(item.price, item.currency)}
+                        </span>
+                      </a>
+                    </article>
+                  </li>
+                );
+              })}
+            </ul>
+            {shopItems.length > 1 && (
+              <div class="shop-slider-controls">
+                <CarouselControls count={shopItems.length} label="item" titles={shopItems.map((i) => i.title)} />
+              </div>
+            )}
+          </div>
         )}
       </div>
     </section>
@@ -254,6 +275,37 @@ const description = about?.bio?.split(/\n\s*\n/)[0] || `${artistName} — music,
     )}
   </main>
 </Layout>
+
+<script>
+  // Swap the SoundCloud placeholder for the real player once the visitor asks for it.
+  // The choice is remembered on this device so returning visitors get the player straight away.
+  const KEY = 'soundcloud-ok';
+  for (const box of document.querySelectorAll<HTMLElement>('[data-soundcloud]')) {
+    const load = (autoplay: boolean) => {
+      const frame = document.createElement('iframe');
+      frame.className = 'soundcloud';
+      frame.title = box.dataset.title ?? 'SoundCloud player';
+      frame.allow = 'autoplay';
+      frame.loading = 'lazy';
+      frame.src = autoplay ? box.dataset.src! : box.dataset.src!.replace('auto_play=true', 'auto_play=false');
+      box.replaceWith(frame);
+    };
+    let remembered = false;
+    try {
+      remembered = localStorage.getItem(KEY) === '1';
+    } catch {}
+    if (remembered) {
+      load(false);
+      continue;
+    }
+    box.querySelector('[data-soundcloud-load]')?.addEventListener('click', () => {
+      try {
+        localStorage.setItem(KEY, '1');
+      } catch {}
+      load(true);
+    });
+  }
+</script>
 
 <style>
   /* ---------- Hero ---------- */
@@ -388,7 +440,8 @@ const description = about?.bio?.split(/\n\s*\n/)[0] || `${artistName} — music,
 
   /* ---------- Music ---------- */
 
-  .soundcloud {
+  /* :global so the player iframe, which is added by script after the click, gets these sizes too. */
+  :global(.soundcloud) {
     display: block;
     width: 100%;
     height: 380px;
@@ -396,8 +449,36 @@ const description = about?.bio?.split(/\n\s*\n/)[0] || `${artistName} — music,
     background: var(--color-surface);
   }
 
+  .soundcloud-facade {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    text-align: center;
+  }
+
+  .soundcloud-note {
+    margin: 0;
+    max-width: 36ch;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+  }
+
+  .soundcloud-more {
+    margin-top: calc(var(--space-2) * -1);
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--tap);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
   @media (min-width: 640px) {
-    .soundcloud {
+    :global(.soundcloud) {
       height: 450px;
     }
   }
@@ -518,18 +599,43 @@ const description = about?.bio?.split(/\n\s*\n/)[0] || `${artistName} — music,
     color: var(--color-text-muted);
   }
 
+  /* Phones: horizontal, swipeable, one item per view (like Projects). */
   .shop-grid {
+    position: relative; /* slide.offsetLeft is measured from the track */
     list-style: none;
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: var(--space-4) var(--space-3);
+    display: flex;
+    gap: var(--space-2);
     margin: 0;
     padding: 0;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
   }
 
-  @media (min-width: 480px) {
+  .shop-grid::-webkit-scrollbar {
+    display: none;
+  }
+
+  .shop-slide {
+    flex: 0 0 100%;
+    min-width: 0;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+
+  /* Tablet+: a normal grid; the item carousel controls aren't needed. */
+  @media (min-width: 640px) {
     .shop-grid {
+      display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--space-4) var(--space-3);
+      overflow: visible;
+    }
+
+    .shop-slider-controls {
+      display: none;
     }
   }
 
@@ -542,28 +648,20 @@ const description = about?.bio?.split(/\n\s*\n/)[0] || `${artistName} — music,
   .shop-card {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
-    text-decoration: none;
     text-align: center;
   }
 
-  .shop-image {
-    overflow: hidden;
-    margin-bottom: var(--space-1);
-    background: var(--color-surface);
+  .shop-card-link {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding-top: var(--space-1);
+    text-decoration: none;
   }
 
-  .shop-image img {
-    width: 100%;
-    aspect-ratio: 1 / 1;
-    object-fit: cover;
-    transition: transform 0.6s var(--ease-out);
-  }
-
-  @media (prefers-reduced-motion: no-preference) {
-    .shop-card:hover .shop-image img {
-      transform: scale(1.05);
-    }
+  .shop-card-link:hover .shop-title {
+    text-decoration: underline;
+    text-underline-offset: 4px;
   }
 
   .shop-title {
