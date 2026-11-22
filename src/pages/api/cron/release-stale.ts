@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { CRON_SECRET } from 'astro:env/server';
 import { releaseStaleReservations } from '../../../lib/reconcile';
+import { sendPendingConfirmations } from '../../../lib/email/order-confirmation';
 
 export const prerender = false;
 
@@ -15,7 +16,8 @@ function safeEqual(a: string, b: string): boolean {
 }
 
 /**
- * Scheduled cleanup of stuck reservations. Called every 15 minutes by the
+ * Scheduled cleanup of stuck reservations, plus retrying any order
+ * confirmation emails that didn't go out. Called every 15 minutes by the
  * Cloudflare Cron Trigger (src/worker.ts), in-process. Host-neutral: any
  * scheduler that can POST with the secret (e.g. GitHub Actions) works too.
  */
@@ -29,7 +31,13 @@ export const POST: APIRoute = async ({ request }) => {
 
   try {
     const summary = await releaseStaleReservations();
-    return new Response(JSON.stringify(summary), {
+    // Runs after cleanup, so orders it just recovered as paid get their email too.
+    // Kept separate: an email problem must never stop stock being released.
+    const confirmations = await sendPendingConfirmations().catch((err) => {
+      console.error('Confirmation email retries failed', err);
+      return { sent: 0, errors: 1 };
+    });
+    return new Response(JSON.stringify({ ...summary, confirmations }), {
       status: 200,
       headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
     });

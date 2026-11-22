@@ -10,6 +10,7 @@ import {
   recordRefund,
   type PaymentDetails,
 } from '../orders';
+import { sendOrderConfirmationQuietly } from '../email/order-confirmation';
 
 /** Throws if the signature is missing/invalid. Needs the raw, unparsed body. */
 export function verifyEvent(rawBody: string, signature: string): Promise<Stripe.Event> {
@@ -58,8 +59,12 @@ export async function handleCompleted(session: Stripe.Checkout.Session) {
   const settled = isSettled(session);
 
   if (orderId) {
-    if (settled) await markPaid(orderId, details, fallbackFrom(session));
-    else await markProcessing(orderId, details); // delayed method; wait for async_payment_*
+    if (settled) {
+      await markPaid(orderId, details, fallbackFrom(session));
+      await sendOrderConfirmationQuietly(orderId);
+    } else {
+      await markProcessing(orderId, details); // delayed method; wait for async_payment_*
+    }
     return;
   }
 
@@ -81,6 +86,7 @@ export async function handleCompleted(session: Stripe.Checkout.Session) {
     { source: 'payment-link', ...(session.metadata?.kind ? { kind: session.metadata.kind } : {}) },
     session.metadata?.stockPath, // set on ticket Payment Links, e.g. ticketTypes[_key=="abc"].stock
   );
+  await sendOrderConfirmationQuietly(session.id);
 }
 
 /**
@@ -96,8 +102,12 @@ export async function handleEvent(event: Stripe.Event): Promise<void> {
 
     case 'checkout.session.async_payment_succeeded': {
       const session = event.data.object;
-      if (session.metadata?.orderId) await markPaid(session.metadata.orderId, paymentDetails(session), fallbackFrom(session));
-      else await handleCompleted(session);
+      if (session.metadata?.orderId) {
+        await markPaid(session.metadata.orderId, paymentDetails(session), fallbackFrom(session));
+        await sendOrderConfirmationQuietly(session.metadata.orderId);
+      } else {
+        await handleCompleted(session);
+      }
       break;
     }
 

@@ -98,6 +98,12 @@ export default defineType({
     defineField({name: 'ticketTypeKey', title: 'Ticket type key (technical)', type: 'string', hidden: true}),
     defineField({name: 'stripeSessionId', title: 'Stripe Checkout Session', type: 'string'}),
     defineField({name: 'stripePaymentIntentId', title: 'Stripe Payment', type: 'string'}),
+    defineField({
+      name: 'confirmationSentAt',
+      title: 'Confirmation email sent',
+      type: 'datetime',
+      description: 'Empty on a paid order = the email hasn\'t gone out yet (it retries automatically for 2 days).',
+    }),
     defineField({name: 'createdAt', title: 'Created', type: 'datetime'}),
     defineField({name: 'updatedAt', title: 'Updated', type: 'datetime'}),
   ],

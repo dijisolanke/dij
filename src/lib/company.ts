@@ -16,7 +16,7 @@ export const COMPANY = {
   registeredNumber: "1527969",
   registeredIn: "England and Wales",
   registeredOffice: "4 Ashgil Mews, Newcastle, NE5 4EW",
-  email: "ihdwhy@gmail.com",
+  email: "hello@dijiofficial.com",
   vatRegistered: false,
 } as const;
 

@@ -39,6 +39,11 @@ export default defineConfig({
       // Protects the scheduled stale-reservation cleanup (/api/cron/release-stale).
       // Optional so a missing value only disables cleanup, never the shop.
       CRON_SECRET: envField.string({ context: 'server', access: 'secret', optional: true }),
+
+      // Order confirmation emails (Resend). Optional: without a key, orders work
+      // as normal and no confirmation is sent (Stripe's receipt still goes out).
+      RESEND_API_KEY: envField.string({ context: 'server', access: 'secret', optional: true }),
+      EMAIL_FROM: envField.string({ context: 'server', access: 'public', default: 'Diji <orders@dijiofficial.com>' }),
     },
   },
 });

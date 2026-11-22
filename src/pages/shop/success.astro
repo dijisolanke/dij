@@ -91,7 +91,7 @@ const backLabel = isTicket ? 'Back to live dates' : 'Back to shop';
       <>
         <h1>We couldn't find that order</h1>
         <p class="lead">
-          If you've just paid, check your email for your receipt from Stripe — your order is safe. If something looks
+          If you've just paid, check your email for your order confirmation — your order is safe. If something looks
           wrong, get in touch and we'll sort it out.
         </p>
         <a href="/" class="button">Back to home</a>
@@ -112,7 +112,10 @@ const backLabel = isTicket ? 'Back to live dates' : 'Back to shop';
             at the door.
           </p>
         ) : (
-          <p class="lead">Your order is in. We'll be in touch {email ? `at ${email} ` : ''}when it's on its way.</p>
+          <p class="lead">
+            Your order is in. A confirmation is on its way{email ? ` to ${email}` : ''}, and we'll email again when your
+            order ships.
+          </p>
         )}
 
         {lines.length > 0 && (
@@ -149,7 +152,7 @@ const backLabel = isTicket ? 'Back to live dates' : 'Back to shop';
               )}
               {email && (
                 <>
-                  <dt>Receipt sent to</dt>
+                  <dt>Confirmation sent to</dt>
                   <dd>{email}</dd>
                 </>
               )}
