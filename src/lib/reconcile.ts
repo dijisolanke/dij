@@ -1,4 +1,5 @@
 import type Stripe from 'stripe';
+import { STRIPE_SECRET_KEY } from 'astro:env/server';
 import { stripe } from './stripe/client';
 import { handleCompleted } from './stripe/webhook';
 import { cancelOrder, getStalePendingOrders, markExpired, orderIdFromDocId, type OrderDoc } from './orders';
@@ -14,6 +15,16 @@ export const STALE_AFTER_MS = 2 * 60 * 60 * 1000;
  * write failed (attachSession is best-effort), search sessions created around
  * the order's time for our orderId — a missing ID doesn't prove no session exists.
  */
+/**
+ * A test-mode session (cs_test_…) can't be looked up with a live key, or vice
+ * versa. That happens when a site points at the other site's dataset (e.g. the
+ * dev site, on test keys, writing into production).
+ *  - Test order seen by the live site: test money is never real → cancel it.
+ *  - Live order seen by the dev site: could be a real payment → leave it for the
+ *    live site's own cleanup and just log it.
+ */
+const LIVE_KEY = STRIPE_SECRET_KEY.includes('_live_');
+
 async function findSession(order: OrderDoc): Promise<Stripe.Checkout.Session | null> {
   if (order.stripeSessionId) return stripe.checkout.sessions.retrieve(order.stripeSessionId);
   if (!order.createdAt) return null;
@@ -51,6 +62,16 @@ export async function releaseStaleReservations(now = new Date()): Promise<Cleanu
   for (const order of stale) {
     const orderId = orderIdFromDocId(order._id);
     try {
+      const testSession = order.stripeSessionId?.startsWith('cs_test_');
+      if (LIVE_KEY && testSession) {
+        console.warn('Cancelling test-mode order found by the live site', order._id);
+        if (await cancelOrder(orderId)) summary.cancelled++;
+        continue;
+      }
+      if (!LIVE_KEY && order.stripeSessionId?.startsWith('cs_live_')) {
+        console.warn('Skipping live order found by a test-mode site — check the dataset setting', order._id);
+        continue;
+      }
       const session = await findSession(order);
 
       if (!session) {
