@@ -1,4 +1,5 @@
 import {defineArrayMember, defineField, defineType} from 'sanity'
+import {minPriceCheck} from './minPrice'
 
 export default defineType({
   name: 'gig',
@@ -111,8 +112,13 @@ export default defineType({
               name: 'price',
               title: 'Price',
               type: 'number',
-              description: 'In whole currency units, e.g. 12.5 for £12.50',
-              validation: (Rule) => Rule.required().positive(),
+              description: 'e.g. 12.5 for £12.50. Minimum £0.30 / $0.50 / €0.50.',
+              validation: (Rule) =>
+                Rule.required()
+                  .precision(2)
+                  .custom((price, context) =>
+                    minPriceCheck(price, (context.document as {currency?: string})?.currency),
+                  ),
             }),
             defineField({
               name: 'stock',
