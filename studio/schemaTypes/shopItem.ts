@@ -1,4 +1,5 @@
 import {defineField, defineType} from 'sanity'
+import {minPriceCheck} from './minPrice'
 
 export default defineType({
   name: 'shopItem',
@@ -28,8 +29,11 @@ export default defineType({
       name: 'price',
       title: 'Price',
       type: 'number',
-      description: 'Price in whole currency units, e.g. 20 for $20.00',
-      validation: (Rule) => Rule.required().positive(),
+      description: 'e.g. 20 for £20.00. Include delivery (it\'s built into the price). Minimum £0.30 / $0.50 / €0.50.',
+      validation: (Rule) =>
+        Rule.required()
+          .precision(2)
+          .custom((price, context) => minPriceCheck(price, (context.parent as {currency?: string})?.currency)),
     }),
     defineField({
       name: 'currency',
