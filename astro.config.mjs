@@ -43,6 +43,8 @@ export default defineConfig({
       // Order confirmation emails (Resend). Optional: without a key, orders work
       // as normal and no confirmation is sent (Stripe's receipt still goes out).
       RESEND_API_KEY: envField.string({ context: 'server', access: 'secret', optional: true }),
+      // Optional uptime-monitor heartbeat, pinged after each scheduled cleanup run.
+      HEARTBEAT_URL: envField.string({ context: 'server', access: 'secret', optional: true }),
       EMAIL_FROM: envField.string({ context: 'server', access: 'public', default: 'Diji <orders@dijiofficial.com>' }),
     },
   },

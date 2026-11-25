@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { CRON_SECRET } from 'astro:env/server';
+import { CRON_SECRET, HEARTBEAT_URL } from 'astro:env/server';
 import { releaseStaleReservations } from '../../../lib/reconcile';
 import { sendPendingConfirmations } from '../../../lib/email/order-confirmation';
 
@@ -13,6 +13,23 @@ function safeEqual(a: string, b: string): boolean {
   let diff = x.length ^ y.length;
   for (let i = 0; i < Math.max(x.length, y.length); i++) diff |= (x[i] ?? 0) ^ (y[i] ?? 0);
   return diff === 0;
+}
+
+/**
+ * Tells the uptime monitor the job ran (Better Stack heartbeat). If the pings
+ * stop — cron not firing, wrong secret, Worker broken — or report failure,
+ * the monitor emails you. Optional; never affects the cleanup itself.
+ */
+async function heartbeat(ok: boolean) {
+  if (!HEARTBEAT_URL) return;
+  try {
+    await fetch(ok ? HEARTBEAT_URL : `${HEARTBEAT_URL.replace(/\/$/, '')}/fail`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch (err) {
+    console.warn('Heartbeat ping failed', err);
+  }
 }
 
 /**
@@ -37,12 +54,14 @@ export const POST: APIRoute = async ({ request }) => {
       console.error('Confirmation email retries failed', err);
       return { sent: 0, errors: 1 };
     });
+    await heartbeat(summary.errors + confirmations.errors === 0);
     return new Response(JSON.stringify({ ...summary, confirmations }), {
       status: 200,
       headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
     });
   } catch (err) {
     console.error('Stale reservation cleanup failed', err);
+    await heartbeat(false);
     return new Response('Cleanup failed', { status: 500 });
   }
 };
