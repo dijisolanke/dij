@@ -8,8 +8,8 @@ export const prerender = false;
  * For the uptime monitor: 200 = the site can take orders, 503 = something it
  * depends on is broken. Checks that Sanity answers with our write token (the
  * site, stock and orders all depend on it) and that the payment settings are
- * present. Deliberately says nothing about *which* setting is missing — look
- * at the Worker's settings if `config` is false.
+ * present. `missing` lists the *names* of any missing settings (never values),
+ * so whoever looks after the site knows what to add in the Worker's settings.
  */
 const REQUIRED_SETTINGS = [
   'STRIPE_SECRET_KEY',
@@ -27,10 +27,11 @@ export const GET: APIRoute = async () => {
   ]).catch(() => false);
 
   // getSecret returns undefined for a missing value instead of throwing.
-  const config = REQUIRED_SETTINGS.every((name) => !!getSecret(name));
+  const missing = REQUIRED_SETTINGS.filter((name) => !getSecret(name));
+  const config = missing.length === 0;
 
   const ok = sanity && config;
-  return new Response(JSON.stringify({ ok, sanity, config }), {
+  return new Response(JSON.stringify({ ok, sanity, config, ...(config ? {} : { missing }) }), {
     status: ok ? 200 : 503,
     headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' },
   });
